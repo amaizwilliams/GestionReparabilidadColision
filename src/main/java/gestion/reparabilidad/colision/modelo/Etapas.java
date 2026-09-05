@@ -1,9 +1,6 @@
 package gestion.reparabilidad.colision.modelo;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "etapas")

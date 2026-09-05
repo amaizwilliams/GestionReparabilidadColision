@@ -1,7 +1,5 @@
 package gestion.reparabilidad.colision.modelo;
-
 import jakarta.persistence.*;
-
 import java.time.LocalDateTime;
 
 @Entity

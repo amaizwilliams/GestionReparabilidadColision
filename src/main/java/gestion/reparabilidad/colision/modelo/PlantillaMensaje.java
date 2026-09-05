@@ -1,16 +1,9 @@
 package gestion.reparabilidad.colision.modelo;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
-/* Plantillas con variables interpoladas: {{cliente}}, {{placa}}, {{etapa}}. */
 @Entity
 @Table(name = "plantilla_mensaje")
-@Getter
-@Setter
-@NoArgsConstructor
 public class PlantillaMensaje {
 
     @Id
@@ -29,4 +22,55 @@ public class PlantillaMensaje {
 
     @Column(name = "activo", nullable = false)
     private boolean activo = true;
+
+    public PlantillaMensaje(Long idPlantillaMensaje, String evento, String canal, String contenidoTemplate, boolean activo) {
+        this.idPlantillaMensaje = idPlantillaMensaje;
+        this.evento = evento;
+        this.canal = canal;
+        this.contenidoTemplate = contenidoTemplate;
+        this.activo = activo;
+    }
+
+    public PlantillaMensaje() {
+    }
+
+    public Long getIdPlantillaMensaje() {
+        return idPlantillaMensaje;
+    }
+
+    public void setIdPlantillaMensaje(Long idPlantillaMensaje) {
+        this.idPlantillaMensaje = idPlantillaMensaje;
+    }
+
+    public String getEvento() {
+        return evento;
+    }
+
+    public void setEvento(String evento) {
+        this.evento = evento;
+    }
+
+    public String getCanal() {
+        return canal;
+    }
+
+    public void setCanal(String canal) {
+        this.canal = canal;
+    }
+
+    public String getContenidoTemplate() {
+        return contenidoTemplate;
+    }
+
+    public void setContenidoTemplate(String contenidoTemplate) {
+        this.contenidoTemplate = contenidoTemplate;
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
+    }
 }
