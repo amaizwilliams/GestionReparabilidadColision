@@ -2,17 +2,11 @@ package gestion.reparabilidad.colision.modelo;
 
 import gestion.reparabilidad.colision.modelo.Enums.RolUsuario;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "usuario")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Usuario {
 
     @Id

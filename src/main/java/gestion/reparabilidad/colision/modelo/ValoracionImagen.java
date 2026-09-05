@@ -1,18 +1,12 @@
 package gestion.reparabilidad.colision.modelo;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/* La URL debe ser publica (https): WhatsApp y CESVI la descargan, no aceptan archivos directos. */
+
 @Entity
 @Table(name = "valoracion_imagen")
-@Getter
-@Setter
-@NoArgsConstructor
 public class ValoracionImagen {
 
     @Id
@@ -24,17 +18,63 @@ public class ValoracionImagen {
     @JoinColumn(name = "id_valoracion", referencedColumnName = "id_valoracion", nullable = false)
     private Valoracion valoracion;
 
-    @Column(name = "url", length = 255, nullable = false)
+    @Column(name = "url", length = 2083, nullable = false)
     private String url;
 
-    @Column(name = "descripcion", length = 255)
+    @Column(name = "descripcion", length = 300)
     private String descripcion;
 
     @Column(name = "create_at", nullable = false)
     private LocalDateTime createAt;
 
-    @PrePersist
-    protected void alCrear() {
-        this.createAt = LocalDateTime.now();
+    public ValoracionImagen() {
+    }
+
+    public ValoracionImagen(Long idValoracionImagen, gestion.reparabilidad.colision.modelo.Valoracion valoracion, String url, String descripcion, LocalDateTime createAt) {
+        this.idValoracionImagen = idValoracionImagen;
+        this.valoracion = valoracion;
+        this.url = url;
+        this.descripcion = descripcion;
+        this.createAt = createAt;
+    }
+
+    public Long getIdValoracionImagen() {
+        return idValoracionImagen;
+    }
+
+    public void setIdValoracionImagen(Long idValoracionImagen) {
+        this.idValoracionImagen = idValoracionImagen;
+    }
+
+    public Valoracion getValoracion() {
+        return valoracion;
+    }
+
+    public void setValoracion(Valoracion valoracion) {
+        this.valoracion = valoracion;
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public LocalDateTime getCreateAt() {
+        return createAt;
+    }
+
+    public void setCreateAt(LocalDateTime createAt) {
+        this.createAt = createAt;
     }
 }
