@@ -13,15 +13,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/*
- * Tabla compartida por las dos rutas de ingreso: el modal del backlog al mover la
- * tarjeta y la ficha de detalle de la orden.
- */
 @Entity
 @Table(name = "observacion")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Observacion {
 
     @Id
@@ -51,10 +44,9 @@ public class Observacion {
     @Column(name = "estado_repuestos", length = 20)
     private Repuestos estadoRepuestos;
 
-    @Column(name = "nota", length = 255, nullable = false)
+    @Column(name = "nota", length = 500, nullable = false)
     private String nota;
 
-    /* true = el servicio de notificaciones envia la nota y sus fotos por WhatsApp. */
     @Column(name = "visible_cliente", nullable = false)
     private boolean visibleCliente = true;
 
@@ -64,8 +56,99 @@ public class Observacion {
     @OneToMany(mappedBy = "observacion", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ImagenObservacion> imagenes = new ArrayList<>();
 
-    @PrePersist
-    protected void alCrear() {
-        this.createAt = LocalDateTime.now();
+    public Observacion(Long idObservacion, OrdenReparacion ordenReparacion, Usuario usuario, Etapas etapa, Ubicacion ubicacion, Repuestos estadoRepuestos, String nota, boolean visibleCliente, LocalDateTime createAt, List<ImagenObservacion> imagenes) {
+        this.idObservacion = idObservacion;
+        this.ordenReparacion = ordenReparacion;
+        this.usuario = usuario;
+        this.etapa = etapa;
+        this.ubicacion = ubicacion;
+        this.estadoRepuestos = estadoRepuestos;
+        this.nota = nota;
+        this.visibleCliente = visibleCliente;
+        this.createAt = createAt;
+        this.imagenes = imagenes;
+    }
+
+    public Observacion() {
+    }
+
+    public Long getIdObservacion() {
+        return idObservacion;
+    }
+
+    public void setIdObservacion(Long idObservacion) {
+        this.idObservacion = idObservacion;
+    }
+
+    public OrdenReparacion getOrdenReparacion() {
+        return ordenReparacion;
+    }
+
+    public void setOrdenReparacion(OrdenReparacion ordenReparacion) {
+        this.ordenReparacion = ordenReparacion;
+    }
+
+    public Usuario getUsuario() {
+        return usuario;
+    }
+
+    public void setUsuario(Usuario usuario) {
+        this.usuario = usuario;
+    }
+
+    public Etapas getEtapa() {
+        return etapa;
+    }
+
+    public void setEtapa(Etapas etapa) {
+        this.etapa = etapa;
+    }
+
+    public Ubicacion getUbicacion() {
+        return ubicacion;
+    }
+
+    public void setUbicacion(Ubicacion ubicacion) {
+        this.ubicacion = ubicacion;
+    }
+
+    public Repuestos getEstadoRepuestos() {
+        return estadoRepuestos;
+    }
+
+    public void setEstadoRepuestos(Repuestos estadoRepuestos) {
+        this.estadoRepuestos = estadoRepuestos;
+    }
+
+    public String getNota() {
+        return nota;
+    }
+
+    public void setNota(String nota) {
+        this.nota = nota;
+    }
+
+    public boolean isVisibleCliente() {
+        return visibleCliente;
+    }
+
+    public void setVisibleCliente(boolean visibleCliente) {
+        this.visibleCliente = visibleCliente;
+    }
+
+    public LocalDateTime getCreateAt() {
+        return createAt;
+    }
+
+    public void setCreateAt(LocalDateTime createAt) {
+        this.createAt = createAt;
+    }
+
+    public List<ImagenObservacion> getImagenes() {
+        return imagenes;
+    }
+
+    public void setImagenes(List<ImagenObservacion> imagenes) {
+        this.imagenes = imagenes;
     }
 }

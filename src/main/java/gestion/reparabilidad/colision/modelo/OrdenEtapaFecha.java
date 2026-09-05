@@ -1,23 +1,12 @@
 package gestion.reparabilidad.colision.modelo;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(
-        name = "orden_etapa_fecha",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_orden_etapa",
-                columnNames = {"id_orden_reparacion", "id_etapa"}
-        )
-)
-@Getter
-@Setter
-@NoArgsConstructor
+@Table(name = "orden_etapa_fecha")
+
 public class OrdenEtapaFecha {
 
     @Id
@@ -33,7 +22,6 @@ public class OrdenEtapaFecha {
     @JoinColumn(name = "id_etapa", referencedColumnName = "id_etapa", nullable = false)
     private Etapas etapa;
 
-    /* Tecnico que trabajo ESTA etapa puntual: base del futuro sistema de pagos. */
     @ManyToOne
     @JoinColumn(name = "id_tecnico", referencedColumnName = "id_tecnico")
     private Tecnico tecnico;
@@ -41,22 +29,78 @@ public class OrdenEtapaFecha {
     @Column(name = "fecha_inicio")
     private LocalDateTime fechaInicio;
 
-    /* La marca cambiarEtapa() al cerrar la etapa anterior. Nunca se fija desde la UI. */
     @Column(name = "fecha_fin")
     private LocalDateTime fechaFin;
 
     @Column(name = "completada", nullable = false)
     private Boolean completada = false;
 
-    public void marcarFechaInicio() {
-        this.fechaInicio = LocalDateTime.now();
-    }
-
-    public void marcarFechaCompletada() {
-        this.completada = true;
-    }
-
-    public void asignarTecnicoEtapa(Tecnico tecnico) {
+    public OrdenEtapaFecha(Long idOrdenEtapaFecha, OrdenReparacion ordenReparacion, Etapas etapa, Tecnico tecnico, LocalDateTime fechaInicio, LocalDateTime fechaFin, Boolean completada) {
+        this.idOrdenEtapaFecha = idOrdenEtapaFecha;
+        this.ordenReparacion = ordenReparacion;
+        this.etapa = etapa;
         this.tecnico = tecnico;
+        this.fechaInicio = fechaInicio;
+        this.fechaFin = fechaFin;
+        this.completada = completada;
+    }
+
+    public OrdenEtapaFecha() {
+    }
+
+    public Long getIdOrdenEtapaFecha() {
+        return idOrdenEtapaFecha;
+    }
+
+    public void setIdOrdenEtapaFecha(Long idOrdenEtapaFecha) {
+        this.idOrdenEtapaFecha = idOrdenEtapaFecha;
+    }
+
+    public OrdenReparacion getOrdenReparacion() {
+        return ordenReparacion;
+    }
+
+    public void setOrdenReparacion(OrdenReparacion ordenReparacion) {
+        this.ordenReparacion = ordenReparacion;
+    }
+
+    public Etapas getEtapa() {
+        return etapa;
+    }
+
+    public void setEtapa(Etapas etapa) {
+        this.etapa = etapa;
+    }
+
+    public Tecnico getTecnico() {
+        return tecnico;
+    }
+
+    public void setTecnico(Tecnico tecnico) {
+        this.tecnico = tecnico;
+    }
+
+    public LocalDateTime getFechaInicio() {
+        return fechaInicio;
+    }
+
+    public void setFechaInicio(LocalDateTime fechaInicio) {
+        this.fechaInicio = fechaInicio;
+    }
+
+    public LocalDateTime getFechaFin() {
+        return fechaFin;
+    }
+
+    public void setFechaFin(LocalDateTime fechaFin) {
+        this.fechaFin = fechaFin;
+    }
+
+    public Boolean getCompletada() {
+        return completada;
+    }
+
+    public void setCompletada(Boolean completada) {
+        this.completada = completada;
     }
 }

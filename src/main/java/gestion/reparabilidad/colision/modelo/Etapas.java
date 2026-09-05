@@ -7,9 +7,6 @@ import lombok.Setter;
 
 @Entity
 @Table(name = "etapas")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Etapas {
 
     @Id
@@ -17,13 +14,58 @@ public class Etapas {
     @Column(name = "id_etapa")
     private Long idEtapa;
 
-    @Column(name = "nombre", length = 255, nullable = false)
+    @Column(name = "nombre_etapa", length = 100, nullable = false)
     private String nombre;
 
-    /* Valor de negocio reordenable por el admin: no lleva @GeneratedValue. */
     @Column(name = "orden", nullable = false)
     private Integer orden;
 
     @Column(name = "descripcion", length = 255)
     private String descripcion;
+
+    //constructores
+
+    public Etapas(Long idEtapa, String nombre, Integer orden, String descripcion) {
+        this.idEtapa = idEtapa;
+        this.nombre = nombre;
+        this.orden = orden;
+        this.descripcion = descripcion;
+    }
+
+    public Etapas() {
+    }
+
+    //getters and setters
+
+    public Long getIdEtapa() {
+        return idEtapa;
+    }
+
+    public void setIdEtapa(Long idEtapa) {
+        this.idEtapa = idEtapa;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public Integer getOrden() {
+        return orden;
+    }
+
+    public void setOrden(Integer orden) {
+        this.orden = orden;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
 }

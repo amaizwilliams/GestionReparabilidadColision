@@ -7,12 +7,8 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/* La URL debe ser publica (https): la API de WhatsApp la descarga para adjuntarla. */
 @Entity
 @Table(name = "imagen_observacion")
-@Getter
-@Setter
-@NoArgsConstructor
 public class ImagenObservacion {
 
     @Id
@@ -30,8 +26,49 @@ public class ImagenObservacion {
     @Column(name = "create_at", nullable = false)
     private LocalDateTime createAt;
 
-    @PrePersist
-    protected void alCrear() {
-        this.createAt = LocalDateTime.now();
+    //constructores
+
+    public ImagenObservacion(Long idImagenesObservacion, Observacion observacion, String url, LocalDateTime createAt) {
+        this.idImagenesObservacion = idImagenesObservacion;
+        this.observacion = observacion;
+        this.url = url;
+        this.createAt = createAt;
+    }
+
+    public ImagenObservacion() {
+    }
+
+    //getters and setters
+
+    public Long getIdImagenesObservacion() {
+        return idImagenesObservacion;
+    }
+
+    public void setIdImagenesObservacion(Long idImagenesObservacion) {
+        this.idImagenesObservacion = idImagenesObservacion;
+    }
+
+    public Observacion getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(Observacion observacion) {
+        this.observacion = observacion;
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    public LocalDateTime getCreateAt() {
+        return createAt;
+    }
+
+    public void setCreateAt(LocalDateTime createAt) {
+        this.createAt = createAt;
     }
 }

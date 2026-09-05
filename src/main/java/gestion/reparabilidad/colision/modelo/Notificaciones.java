@@ -9,13 +9,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
-
-/* Log de todos los mensajes de WhatsApp: habilita debug, reintentos y auditoria. */
 @Entity
 @Table(name = "notificaciones")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Notificaciones {
 
     @Id
@@ -31,7 +26,6 @@ public class Notificaciones {
     @JoinColumn(name = "id_cliente", referencedColumnName = "id_cliente", nullable = false)
     private Cliente cliente;
 
-    /* Origen del mensaje cuando lo dispara una observacion; null si lo dispara un cambio de etapa. */
     @ManyToOne
     @JoinColumn(name = "id_observacion", referencedColumnName = "id_observacion")
     private Observacion observacion;
@@ -45,7 +39,6 @@ public class Notificaciones {
     @Column(name = "contenido_enviado", nullable = false)
     private String contenidoEnviado;
 
-    /* Array JSON con las URLs de las fotos adjuntas al mensaje. */
     @Column(name = "imagenes_enviadas", columnDefinition = "JSON")
     private String imagenesEnviadas;
 
@@ -63,19 +56,117 @@ public class Notificaciones {
     @Column(name = "create_at", nullable = false)
     private LocalDateTime createAt;
 
-    @PrePersist
-    protected void alCrear() {
-        this.createAt = LocalDateTime.now();
-    }
-
-    public void marcarEnviada() {
-        this.estadoEnvio = EstadoEnvio.ENVIADO;
-        this.fechaEnvio = LocalDateTime.now();
-        this.errorDetalle = null;
-    }
-
-    public void marcarFallida(String errorDetalle) {
-        this.estadoEnvio = EstadoEnvio.FALLIDO;
+    public Notificaciones(Long idNotificacion, OrdenReparacion ordenReparacion, Cliente cliente, Observacion observacion, String eventoDisparador, String canal, String contenidoEnviado, String imagenesEnviadas, EstadoEnvio estadoEnvio, LocalDateTime fechaEnvio, String errorDetalle, LocalDateTime createAt) {
+        this.idNotificacion = idNotificacion;
+        this.ordenReparacion = ordenReparacion;
+        this.cliente = cliente;
+        this.observacion = observacion;
+        this.eventoDisparador = eventoDisparador;
+        this.canal = canal;
+        this.contenidoEnviado = contenidoEnviado;
+        this.imagenesEnviadas = imagenesEnviadas;
+        this.estadoEnvio = estadoEnvio;
+        this.fechaEnvio = fechaEnvio;
         this.errorDetalle = errorDetalle;
+        this.createAt = createAt;
+    }
+
+    public Notificaciones() {
+    }
+
+    public Long getIdNotificacion() {
+        return idNotificacion;
+    }
+
+    public void setIdNotificacion(Long idNotificacion) {
+        this.idNotificacion = idNotificacion;
+    }
+
+    public OrdenReparacion getOrdenReparacion() {
+        return ordenReparacion;
+    }
+
+    public void setOrdenReparacion(OrdenReparacion ordenReparacion) {
+        this.ordenReparacion = ordenReparacion;
+    }
+
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public Observacion getObservacion() {
+        return observacion;
+    }
+
+    public void setObservacion(Observacion observacion) {
+        this.observacion = observacion;
+    }
+
+    public String getEventoDisparador() {
+        return eventoDisparador;
+    }
+
+    public void setEventoDisparador(String eventoDisparador) {
+        this.eventoDisparador = eventoDisparador;
+    }
+
+    public String getCanal() {
+        return canal;
+    }
+
+    public void setCanal(String canal) {
+        this.canal = canal;
+    }
+
+    public String getContenidoEnviado() {
+        return contenidoEnviado;
+    }
+
+    public void setContenidoEnviado(String contenidoEnviado) {
+        this.contenidoEnviado = contenidoEnviado;
+    }
+
+    public String getImagenesEnviadas() {
+        return imagenesEnviadas;
+    }
+
+    public void setImagenesEnviadas(String imagenesEnviadas) {
+        this.imagenesEnviadas = imagenesEnviadas;
+    }
+
+    public EstadoEnvio getEstadoEnvio() {
+        return estadoEnvio;
+    }
+
+    public void setEstadoEnvio(EstadoEnvio estadoEnvio) {
+        this.estadoEnvio = estadoEnvio;
+    }
+
+    public LocalDateTime getFechaEnvio() {
+        return fechaEnvio;
+    }
+
+    public void setFechaEnvio(LocalDateTime fechaEnvio) {
+        this.fechaEnvio = fechaEnvio;
+    }
+
+    public String getErrorDetalle() {
+        return errorDetalle;
+    }
+
+    public void setErrorDetalle(String errorDetalle) {
+        this.errorDetalle = errorDetalle;
+    }
+
+    public LocalDateTime getCreateAt() {
+        return createAt;
+    }
+
+    public void setCreateAt(LocalDateTime createAt) {
+        this.createAt = createAt;
     }
 }

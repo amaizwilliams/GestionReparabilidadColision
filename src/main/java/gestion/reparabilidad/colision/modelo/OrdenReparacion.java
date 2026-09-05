@@ -2,9 +2,6 @@ package gestion.reparabilidad.colision.modelo;
 
 import gestion.reparabilidad.colision.modelo.Enums.Estado;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -16,9 +13,6 @@ import java.util.List;
 
 @Entity
 @Table(name = "orden_reparacion")
-@Getter
-@Setter
-@NoArgsConstructor
 public class OrdenReparacion {
 
     @Id
@@ -72,89 +66,171 @@ public class OrdenReparacion {
     @Column(name = "update_at", nullable = false)
     private LocalDateTime updateAt;
 
-    @OneToMany(mappedBy = "ordenReparacion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "ordenReparacion")
     private List<HistorialEtapas> historialEtapas = new ArrayList<>();
 
-    @OneToMany(mappedBy = "ordenReparacion", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "ordenReparacion")
     private List<OrdenEtapaFecha> ordenEtapaFechas = new ArrayList<>();
 
     @OneToOne(mappedBy = "ordenReparacion")
     private Valoracion valoracion;
 
-    @PrePersist
-    protected void alCrear() {
-        this.createAt = LocalDateTime.now();
-        this.updateAt = this.createAt;
+    public OrdenReparacion(Long idOrdenReparacion, Vehiculo vehiculo, Cliente cliente, Usuario usuarioCreador, Tecnico tecnicoResponsable, Etapas etapaActual, Estado estado, LocalDate fechaIngresoCotizar, LocalDate fechaIngresoReparacion, LocalDate fechaDeEntregaEstimada, LocalDate fechaDeEntregaReal, Byte diasEstimadoEntrega, LocalDateTime createAt, LocalDateTime updateAt, List<HistorialEtapas> historialEtapas, List<OrdenEtapaFecha> ordenEtapaFechas, Valoracion valoracion) {
+        this.idOrdenReparacion = idOrdenReparacion;
+        this.vehiculo = vehiculo;
+        this.cliente = cliente;
+        this.usuarioCreador = usuarioCreador;
+        this.tecnicoResponsable = tecnicoResponsable;
+        this.etapaActual = etapaActual;
+        this.estado = estado;
+        this.fechaIngresoCotizar = fechaIngresoCotizar;
+        this.fechaIngresoReparacion = fechaIngresoReparacion;
+        this.fechaDeEntregaEstimada = fechaDeEntregaEstimada;
+        this.fechaDeEntregaReal = fechaDeEntregaReal;
+        this.diasEstimadoEntrega = diasEstimadoEntrega;
+        this.createAt = createAt;
+        this.updateAt = updateAt;
+        this.historialEtapas = historialEtapas;
+        this.ordenEtapaFechas = ordenEtapaFechas;
+        this.valoracion = valoracion;
     }
 
-    @PreUpdate
-    protected void alActualizar() {
-        this.updateAt = LocalDateTime.now();
+    public OrdenReparacion() {
     }
 
-    /*
-     * Mueve la OT a otra etapa dentro del agregado: actualiza etapaActual, cierra la
-     * fecha de la etapa anterior, abre la de la nueva e inserta el registro de historial.
-     * El @Transactional que garantiza que todo esto viaje junto va en el Service que
-     * invoca este metodo, no aca.
-     */
-    public void cambiarEtapa(Etapas nuevaEtapa, Usuario usuario, String comentario) {
-        LocalDateTime ahora = LocalDateTime.now();
-
-        OrdenEtapaFecha enCurso = etapaEnCurso();
-        if (enCurso != null) {
-            enCurso.setFechaFin(ahora);
-            enCurso.setCompletada(true);
-        }
-
-        this.etapaActual = nuevaEtapa;
-
-        /* UNIQUE(idOrdenReparacion, idEtapa): si la etapa ya se recorrio, se reabre esa fila. */
-        OrdenEtapaFecha destino = buscarEtapaFecha(nuevaEtapa);
-        if (destino == null) {
-            destino = new OrdenEtapaFecha();
-            destino.setOrdenReparacion(this);
-            destino.setEtapa(nuevaEtapa);
-            this.ordenEtapaFechas.add(destino);
-        }
-        destino.setFechaInicio(ahora);
-        destino.setFechaFin(null);
-        destino.setCompletada(false);
-
-        HistorialEtapas registro = new HistorialEtapas();
-        registro.setOrdenReparacion(this);
-        registro.setEtapa(nuevaEtapa);
-        registro.setUsuario(usuario);
-        registro.setFechaCambio(ahora);
-        registro.setComentario(comentario);
-        this.historialEtapas.add(registro);
+    public Long getIdOrdenReparacion() {
+        return idOrdenReparacion;
     }
 
-    /* Tecnico responsable general de la OT, distinto del tecnico de cada etapa puntual. */
-    public void asignarTecnico(Tecnico tecnico) {
-        this.tecnicoResponsable = tecnico;
+    public void setIdOrdenReparacion(Long idOrdenReparacion) {
+        this.idOrdenReparacion = idOrdenReparacion;
     }
 
-    public int calcularDiasEnTaller() {
-        LocalDate fin = (this.fechaDeEntregaReal != null) ? this.fechaDeEntregaReal : LocalDate.now();
-        return (int) ChronoUnit.DAYS.between(this.fechaIngresoCotizar, fin);
+    public Vehiculo getVehiculo() {
+        return vehiculo;
     }
 
-    private OrdenEtapaFecha etapaEnCurso() {
-        for (OrdenEtapaFecha fila : this.ordenEtapaFechas) {
-            if (fila.getFechaFin() == null) {
-                return fila;
-            }
-        }
-        return null;
+    public void setVehiculo(Vehiculo vehiculo) {
+        this.vehiculo = vehiculo;
     }
 
-    private OrdenEtapaFecha buscarEtapaFecha(Etapas etapa) {
-        for (OrdenEtapaFecha fila : this.ordenEtapaFechas) {
-            if (fila.getEtapa() != null && fila.getEtapa().equals(etapa)) {
-                return fila;
-            }
-        }
-        return null;
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public Usuario getUsuarioCreador() {
+        return usuarioCreador;
+    }
+
+    public void setUsuarioCreador(Usuario usuarioCreador) {
+        this.usuarioCreador = usuarioCreador;
+    }
+
+    public Tecnico getTecnicoResponsable() {
+        return tecnicoResponsable;
+    }
+
+    public void setTecnicoResponsable(Tecnico tecnicoResponsable) {
+        this.tecnicoResponsable = tecnicoResponsable;
+    }
+
+    public Etapas getEtapaActual() {
+        return etapaActual;
+    }
+
+    public void setEtapaActual(Etapas etapaActual) {
+        this.etapaActual = etapaActual;
+    }
+
+    public Estado getEstado() {
+        return estado;
+    }
+
+    public void setEstado(Estado estado) {
+        this.estado = estado;
+    }
+
+    public LocalDate getFechaIngresoCotizar() {
+        return fechaIngresoCotizar;
+    }
+
+    public void setFechaIngresoCotizar(LocalDate fechaIngresoCotizar) {
+        this.fechaIngresoCotizar = fechaIngresoCotizar;
+    }
+
+    public LocalDate getFechaIngresoReparacion() {
+        return fechaIngresoReparacion;
+    }
+
+    public void setFechaIngresoReparacion(LocalDate fechaIngresoReparacion) {
+        this.fechaIngresoReparacion = fechaIngresoReparacion;
+    }
+
+    public LocalDate getFechaDeEntregaEstimada() {
+        return fechaDeEntregaEstimada;
+    }
+
+    public void setFechaDeEntregaEstimada(LocalDate fechaDeEntregaEstimada) {
+        this.fechaDeEntregaEstimada = fechaDeEntregaEstimada;
+    }
+
+    public LocalDate getFechaDeEntregaReal() {
+        return fechaDeEntregaReal;
+    }
+
+    public void setFechaDeEntregaReal(LocalDate fechaDeEntregaReal) {
+        this.fechaDeEntregaReal = fechaDeEntregaReal;
+    }
+
+    public Byte getDiasEstimadoEntrega() {
+        return diasEstimadoEntrega;
+    }
+
+    public void setDiasEstimadoEntrega(Byte diasEstimadoEntrega) {
+        this.diasEstimadoEntrega = diasEstimadoEntrega;
+    }
+
+    public LocalDateTime getCreateAt() {
+        return createAt;
+    }
+
+    public void setCreateAt(LocalDateTime createAt) {
+        this.createAt = createAt;
+    }
+
+    public LocalDateTime getUpdateAt() {
+        return updateAt;
+    }
+
+    public void setUpdateAt(LocalDateTime updateAt) {
+        this.updateAt = updateAt;
+    }
+
+    public List<HistorialEtapas> getHistorialEtapas() {
+        return historialEtapas;
+    }
+
+    public void setHistorialEtapas(List<HistorialEtapas> historialEtapas) {
+        this.historialEtapas = historialEtapas;
+    }
+
+    public List<OrdenEtapaFecha> getOrdenEtapaFechas() {
+        return ordenEtapaFechas;
+    }
+
+    public void setOrdenEtapaFechas(List<OrdenEtapaFecha> ordenEtapaFechas) {
+        this.ordenEtapaFechas = ordenEtapaFechas;
+    }
+
+    public Valoracion getValoracion() {
+        return valoracion;
+    }
+
+    public void setValoracion(Valoracion valoracion) {
+        this.valoracion = valoracion;
     }
 }
