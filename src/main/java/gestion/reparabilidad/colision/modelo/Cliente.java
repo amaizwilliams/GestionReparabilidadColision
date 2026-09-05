@@ -6,20 +6,22 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
-@Table(name = "tecnico")
+@Table(name = "cliente")
 @Getter
 @Setter
 @NoArgsConstructor
-public class Tecnico {
+public class Cliente {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_tecnico")
-    private Long idTecnico;
+    @Column(name = "id_cliente")
+    private Long idCliente;
 
-    @Column(name = "documento", length = 255, nullable = false, unique = true)
+    @Column(name = "documento", length = 255, nullable = false)
     private String documento;
 
     @Column(name = "nombre_completo", length = 255, nullable = false)
@@ -31,20 +33,14 @@ public class Tecnico {
     @Column(name = "correo", length = 255)
     private String correo;
 
-    @Column(name = "especialidad", length = 255)
-    private String especialidad;
-
-    @Column(name = "activo", nullable = false)
-    private boolean activo = true;
-
     @Column(name = "create_at", nullable = false)
     private LocalDateTime createAt;
 
     @Column(name = "update_at", nullable = false)
     private LocalDateTime updateAt;
 
-    @OneToOne(mappedBy = "tecnico")
-    private Usuario usuario;
+    @OneToMany(mappedBy = "cliente")
+    private List<Vehiculo> vehiculos = new ArrayList<>();
 
     @PrePersist
     protected void alCrear() {

@@ -9,35 +9,23 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "usuario")
+@Table(name = "rol_modulo")
 @Getter
 @Setter
 @NoArgsConstructor
-public class Usuario {
+public class RolModulo {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_usuario")
-    private Long idUsuario;
-
-    @Column(name = "nombre", nullable = false)
-    private String nombre;
-
-    @Column(name = "email", nullable = false, unique = true)
-    private String email;
+    @Column(name = "id_rol_modulo")
+    private Long idRolModulo;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "rol", length = 20, nullable = false)
     private RolUsuario rol;
 
-    @OneToOne
-    @JoinColumn(name = "id_tecnico", referencedColumnName = "id_tecnico")
-    private Tecnico tecnico;
-
-    @Column(name = "password_hash", nullable = false)
-    private String passwordHash;
-
-    @Column(name = "activo", nullable = false)
-    private boolean activo = true;
+    @ManyToOne
+    @JoinColumn(name = "id_modulo", referencedColumnName = "id_modulo", nullable = false)
+    private Modulo modulo;
 }

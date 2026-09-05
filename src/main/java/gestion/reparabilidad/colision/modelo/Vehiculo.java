@@ -1,29 +1,47 @@
 package gestion.reparabilidad.colision.modelo;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-    @Entity
-    @Table(name = "vehiculo")
-    public class Vehiculo {
-        @Id
-        @Column(length = 10,  nullable = false)
-        private long idVehiculo;
-        @Column(length = 6,  nullable = false)
-        private String placa;
-        @Column(length = 100, nullable = false )
-        private String marca;
-        @Column(length = 4, nullable = false)
-        private String modelo;
-        /*private String anio;*/
-        @Column(length = 50, nullable = false)
-        private String color;
-        @Column(length = 100, nullable = false)
-        private String vin;
+import java.util.ArrayList;
+import java.util.List;
 
-        /*private long idCliente;*/
+@Entity
+@Table(name = "vehiculo", indexes = @Index(name = "idx_vehiculo_placa", columnList = "placa"))
+@Getter
+@Setter
+@NoArgsConstructor
+public class Vehiculo {
 
-    }
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_vehiculo")
+    private Long idVehiculo;
 
+    @ManyToOne
+    @JoinColumn(name = "id_cliente", referencedColumnName = "id_cliente", nullable = false)
+    private Cliente cliente;
+
+    @Column(name = "placa", length = 255, nullable = false)
+    private String placa;
+
+    @Column(name = "marca", length = 255, nullable = false)
+    private String marca;
+
+    @Column(name = "modelo", length = 255, nullable = false)
+    private String modelo;
+
+    @Column(name = "anio", nullable = false)
+    private Short anio;
+
+    @Column(name = "color", length = 255)
+    private String color;
+
+    @Column(name = "vin", length = 255)
+    private String vin;
+
+    @OneToMany(mappedBy = "vehiculo")
+    private List<OrdenReparacion> ordenesReparacion = new ArrayList<>();
+}
