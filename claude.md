@@ -48,6 +48,7 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
 ### Nombres de columnas
 - **snake_case** en la base de datos (`id_cliente`, `nombre_completo`, `create_at`), **camelCase** en Java (`idCliente`, `nombreCompleto`, `createAt`). No mezclar (evitar columnas tipo `createAt` sin snake_case).
 - Los nombres de atributos Java deben coincidir exactamente con los de la guía de referencia (`GuiaDiagranaUML.pdf`) — ej: es `nombreCompleto`, no `nombreCliente`; es `celular`, no `telefono`.
+- **`Cliente` es la excepción a la simetría atributo/columna**: sus columnas llevan sufijo de tabla (`documento_cliente`, `nombre_cliente`, `celular_cliente`, `correo_cliente`) mientras los atributos Java siguen siendo `documento`, `nombreCompleto`, `celular`, `correo`. Ninguna otra entidad usa ese sufijo (`Tecnico` tiene `documento`, `nombre_completo`, `celular`, `correo` sin sufijo). Si aparece una inconsistencia al escribir queries nativas o el DDL, es por esto. Pendiente decidir si se unifica en un sentido o en el otro.
 - Nunca declarar un atributo con mayúscula inicial (ej: `private Cliente Cliente;` es incorrecto — debe ser `private Cliente cliente;`).
 
 ### Enums
@@ -69,30 +70,70 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
   (imports: `org.hibernate.annotations.JdbcTypeCode` y `org.hibernate.type.SqlTypes`)
 - Enums confirmados: `RolUsuario` (ADMIN, ASESOR, GERENTE, TECNICO), `Estado` (ACTIVA, CERRADA, CANCELADA), `EstadoEnvio` (PENDIENTE, ENVIADO, FALLIDO), `Accion` (REPARACION, SUSTITUCION), `Gravedad` (LEVE, MEDIO, FUERTE), `Ubicacion` (EN_TALLER, FUERA_DE_TALLER), `Repuestos` (COMPLETOS, PENDIENTES).
 
-### Lombok
-- Las entidades usan `@Getter`, `@Setter` y `@NoArgsConstructor` de Lombok (ya está en el `pom.xml` con `annotationProcessorPaths` configurado).
-- **No usar `@Data`, `@ToString` ni `@EqualsAndHashCode` en entidades JPA**: generan `toString()`/`equals()` que recorren las relaciones y disparan carga lazy o recursión infinita entre los dos lados de una relación bidireccional.
+### Getters/setters y constructores (ya no se usa Lombok)
+- **Las entidades ya NO usan Lombok.** Se retiraron `@Getter`, `@Setter`, `@NoArgsConstructor` y sus `import lombok.*` de todo el paquete `modelo`. Cada entidad declara a mano:
+  - un **constructor vacío** (obligatorio para JPA/Hibernate),
+  - un **constructor con todos los campos**,
+  - **getters y setters explícitos** para cada atributo.
+- Motivo: el código generado por Lombok no se ve en el archivo, y Adrian revisa las clases línea por línea. Con los accesores escritos, lo que está en la clase es exactamente lo que existe.
+- La dependencia de Lombok **sigue declarada en el `pom.xml`** (con `annotationProcessorPaths`), pero ninguna clase la usa hoy. Si se confirma que no se va a volver a usar, se puede quitar del `pom.xml`.
+- Al **crear o corregir una entidad, escribir los accesores a mano** — no reintroducir Lombok sin acordarlo antes.
+- Sigue vigente: **no generar `toString()`, `equals()` ni `hashCode()`** en entidades JPA. Recorren las relaciones y disparan carga lazy o recursión infinita entre los dos lados de una relación bidireccional.
+- Los constructores completos que genera el IDE a veces salen con el tipo totalmente calificado (`gestion.reparabilidad.colision.modelo.Valoracion valoracion`). Compila igual, pero al revisar conviene dejarlo como nombre simple.
 
 ### Timestamps de auditoría
-- Las entidades con `createAt`/`updateAt` los llenan solas con callbacks JPA, no desde el Service:
-  ```java
-  @PrePersist
-  protected void alCrear() {
-      this.createAt = LocalDateTime.now();
-      this.updateAt = this.createAt;
-  }
-
-  @PreUpdate
-  protected void alActualizar() {
-      this.updateAt = LocalDateTime.now();
-  }
-  ```
-- Las entidades que solo tienen `createAt` (`Observacion`, `ImagenObservacion`, `ValoracionImagen`, `Notificaciones`) llevan únicamente el `@PrePersist`.
+- **Los callbacks `@PrePersist` / `@PreUpdate` se eliminaron de todas las entidades.** Hoy ninguna clase del paquete `modelo` los tiene.
+- Consecuencia directa: `createAt` y `updateAt` están declarados `nullable = false`, así que **la capa de servicio es responsable de asignarlos** antes de guardar. Si un Service persiste una entidad sin llenarlos, MySQL rechaza el INSERT con violación de NOT NULL.
+- Al escribir los Services hay que decidir explícitamente entre tres opciones y aplicarla igual en todas las entidades:
+  1. asignar `LocalDateTime.now()` a mano en cada Service (lo que aplica hoy por defecto),
+  2. reponer los callbacks JPA en las entidades,
+  3. usar auditoría de Spring Data (`@CreatedDate` / `@LastModifiedDate` + `@EntityListeners(AuditingEntityListener.class)` + `@EnableJpaAuditing`).
+- Entidades afectadas con `createAt` + `updateAt`: `Cliente`, `Tecnico`, `OrdenReparacion`, `Valoracion`. Solo con `createAt`: `Observacion`, `ImagenObservacion`, `ValoracionImagen`, `Notificaciones`.
 
 ### Longitudes de String
 - **Todas las columnas `String` declaran su `length` explícito**, aunque 255 sea el default de JPA y el DDL salga idéntico sin él.
 - La razón es que las entidades son la única fuente de verdad del esquema: con `ddl-auto`, lo que está anotado en la clase **es** la tabla. Si el ancho de una columna no se ve en la entidad, hay que ir a buscarlo a un archivo generado, y eso rompe la revisión línea por línea.
-- La guía asigna `VARCHAR(255)` a todos los campos de texto; las columnas de enum llevan `length = 20`.
+- **Ya no se usa `VARCHAR(255)` genérico.** La guía asignaba 255 a todo campo de texto; se ajustaron los anchos al dato real del dominio para que MySQL no reserve de más y para que la columna documente por sí sola qué se espera guardar. **Ante esta diferencia gana lo que está en la entidad, no la guía.**
+- Las columnas de enum siguen en `length = 20`.
+
+Longitudes vigentes por entidad (estado actual del código):
+
+| Entidad | Columna | length |
+|---|---|---|
+| `Cliente` | `documento_cliente` | 10 |
+| `Cliente` | `nombre_cliente` | 100 |
+| `Cliente` | `celular_cliente` | 10 |
+| `Cliente` | `correo_cliente` | 100 |
+| `Tecnico` | `documento` | 10 |
+| `Tecnico` | `nombre_completo` | 200 |
+| `Tecnico` | `celular` | 10 |
+| `Tecnico` | `correo` | 50 |
+| `Tecnico` | `especialidad` | 100 |
+| `Vehiculo` | `placa` | 6 |
+| `Vehiculo` | `marca` | 20 |
+| `Vehiculo` | `modelo` | 10 |
+| `Vehiculo` | `color` | 50 |
+| `Vehiculo` | `vin` | 100 |
+| `Etapas` | `nombre_etapa` | 100 |
+| `Etapas` | `descripcion` | 255 |
+| `Modulo` | `codigo` | 10 |
+| `Modulo` | `nombre` | 100 |
+| `Observacion` | `nota` | 500 |
+| `ImagenObservacion` | `url` | 255 |
+| `Valoracion` | `descripcion_general` | 500 |
+| `ValoracionDetalle` | `pieza` | 255 |
+| `ValoracionDetalle` | `observacion` | 255 |
+| `ValoracionImagen` | `url` | 2083 |
+| `ValoracionImagen` | `descripcion` | 300 |
+| `PlantillaMensaje` | `evento`, `canal`, `contenido_template` | 255 |
+
+Notas sobre decisiones puntuales:
+- `celular` en 10 asume el móvil colombiano **sin prefijo internacional** (`3001234567`). Esto es incompatible con guardar E.164 (`+573001234567`, 13 caracteres), que es lo que pide la API de WhatsApp. **Pendiente:** o se sube a `length = 15` y se guarda en E.164, o el Service antepone `+57` al construir el mensaje. Aplica a `Cliente.celular` y `Tecnico.celular`.
+- `documento` en 10 cubre cédula colombiana; no alcanza para NIT con dígito de verificación (`900123456-7`, 11 caracteres). Confirmar si el taller factura a empresas.
+- `Vehiculo.placa` en 6 es exacto para placa colombiana (`ABC123` / `ABC12D`), sin guiones. El Service debe normalizar (mayúsculas, sin espacios ni guión) antes de guardar, o el INSERT se trunca.
+- `Vehiculo.modelo` en 10 — si "modelo" es la línea del vehículo (`Sandero Stepway`) se queda corto; si es el año/versión corta, está bien. Verificar contra el uso real.
+- `ValoracionImagen.url` en 2083 es el límite práctico de URL de los navegadores. Nota: MySQL con `utf8mb4` **no permite indexar** una columna así completa (2083 × 4 bytes supera el límite de índice), así que no se le puede poner UNIQUE sin prefijo de índice.
+- Columnas `String` que hoy **no** declaran `length` (quedan en el default 255): `Usuario.nombre`, `Usuario.email`, `Usuario.passwordHash`, `Notificaciones.eventoDisparador`, `Notificaciones.canal`, `Notificaciones.contenidoEnviado`, `Notificaciones.errorDetalle`. Rompen la convención de "siempre `length` explícito" — pendiente asignarles ancho. Ojo con `passwordHash`: un hash BCrypt son 60 caracteres, Argon2 puede pasar de 95.
 
 ### Relaciones JPA
 - Nunca mapear una FK como tipo primitivo (`long idCliente`). Siempre usar el objeto de la entidad relacionada + `@JoinColumn`:
@@ -105,6 +146,7 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
 - `nullable` en `@JoinColumn` debe reflejar la cardinalidad `[0..1]` vs obligatoria de la guía.
 - Relaciones inversas (`@OneToMany` desde el lado "padre") son opcionales — solo agregarlas si de verdad se necesita navegar en ese sentido desde el código.
 - Cardinalidad `1 → N` (ej: Cliente → Vehiculo, Vehiculo → OrdenReparacion) es `@ManyToOne`/`@OneToMany`, no `@OneToOne`. Confundir esto ha sido un error recurrente — verificar siempre contra la guía antes de escribir la relación.
+- **Cascadas**: se retiraron `cascade = CascadeType.ALL` y `orphanRemoval = true` de `Valoracion.detalles` y `Valoracion.imagenes`; ahora son `@OneToMany(mappedBy = "valoracion")` a secas. El Service debe guardar y borrar los `ValoracionDetalle` / `ValoracionImagen` **explícitamente por su propio repositorio** — quitarlos de la lista en memoria ya no los borra de la base. La única relación que conserva cascada es `Observacion.imagenes` (`cascade = ALL`, `orphanRemoval = true`).
 
 ### Tipos de datos (mapeo Java → MySQL)
 | Java | MySQL | Uso |
@@ -123,9 +165,21 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
 
 Cuidado con campos como `documento` (Cliente/Tecnico) o `celular`: aunque parezcan numéricos, van como `String` — un documento puede tener ceros a la izquierda o dígito de verificación con guión, y `celular` necesita formato E.164 (`+57...`).
 
+### Lógica de negocio: las entidades son POJOs
+- **Se eliminaron todos los métodos de negocio de las entidades.** Ya no existen `OrdenReparacion.cambiarEtapa()`, `asignarTecnico()`, `calcularDiasEnTaller()`, `Valoracion.marcarCargadaCesvi()`, ni `Notificaciones.marcarEnviada()` / `marcarFallida()`.
+- El modelo quedó como **entidades anémicas**: solo campos, anotaciones JPA, constructores y accesores. Toda la lógica pasa a la capa de servicio, incluida la que antes vivía en el agregado `OrdenReparacion`.
+- Esto cambia lo que decía antes este archivo ("el único método que vive en la entidad es la lógica de agregado de `OrdenReparacion`"): **ya no hay ninguno**.
+
+### Validaciones que ya no están en el esquema
+Se retiraron restricciones que antes generaba el DDL. Ahora **son responsabilidad del Service** (o hay que reponerlas conscientemente):
+- **CHECK `ck_detalle_gravedad`** en `ValoracionDetalle` (`@Table(check = @CheckConstraint(...))` de JPA 3.2). La regla sigue vigente en el negocio: `gravedad` solo aplica con `accion = REPARACION`; con `SUSTITUCION` debe quedar `NULL`. Hoy nada lo impide a nivel de base de datos.
+- **INDEX `idx_vehiculo_placa`** en `Vehiculo.placa`. La búsqueda por placa (`getVehiculoByPlaca`, `getOrdenReparacionByPlaca`) es la consulta más frecuente del sistema y hoy hace full scan. Conviene reponer el índice — no era UNIQUE, y no debe serlo (un vehículo puede volver al taller y las placas se reasignan).
+
 ### Otros
-- `orden` en `Etapa` **no** lleva `@GeneratedValue` — es un valor de negocio reordenable manualmente (admin puede insertar/reordenar etapas), no una secuencia autogenerada.
-- `fechaFin` en etapas nunca se marca manualmente desde la UI — la asigna el sistema (`cambiarEtapa()`) al cerrar la etapa anterior.
+- `orden` en `Etapas` es `Integer` y **no** lleva `@GeneratedValue` — es un valor de negocio reordenable manualmente (admin puede insertar/reordenar etapas), no una secuencia autogenerada.
+- `fechaFin` en etapas nunca se marca manualmente desde la UI — la asigna el sistema al cerrar la etapa anterior (ahora desde el Service, ya no desde `cambiarEtapa()` en la entidad).
+- `OrdenReparacion.diasEstimadoEntrega` es `Byte` (TINYINT): máximo 127 días. Si una reparación puede pasar de eso, hay que subirlo a `Short`.
+- Se quitaron los comentarios explicativos que tenían varias entidades (`Valoracion`, `ValoracionDetalle`, `ValoracionImagen`, `PlantillaMensaje`). Las reglas que documentaban quedaron recogidas en este archivo.
 
 ---
 
@@ -139,6 +193,7 @@ Cuidado con campos como `documento` (Cliente/Tecnico) o `celular`: aunque parezc
 - **CESVI** se trackea de forma independiente vía `Valoracion.cargadaCesvi` (boolean) + `cargadaCesviAt`. Se marca manualmente desde la UI, no automáticamente.
 - **Control de acceso data-driven**: `Modulo` + `RolModulo` en vez de reglas hardcodeadas en Spring Security. Spring Security consulta `RolModulo` (cacheada) vía JWT en cada request.
 - **Modal de cambio de etapa**: selector de técnico obligatorio (FK a `Tecnico`), observación opcional (tabla compartida `Observacion`), notificación WhatsApp opcional (`visibleCliente`), notificación asíncrona que nunca bloquea ni hace rollback de la transacción principal.
+- **Modelo anémico**: las entidades no llevan comportamiento. Todo el flujo de cambio de etapa, marcado de CESVI y estado de notificaciones vive en la capa de servicio.
 
 ### Flujo de etapas (Kanban)
 ```
@@ -152,7 +207,7 @@ Ingreso a cotizar → Desarme → Latonería → Bancada → Electromecánica
 
 | Entidad | Estado | Notas |
 |---|---|---|
-| `Usuario` | ✅ Completa | `email` UNIQUE, `passwordHash` (no `passWordHash`), `@OneToOne` opcional a `Tecnico` |
+| `Usuario` | 🔶 En progreso | `email` UNIQUE, `passwordHash` (no `passWordHash`), `@OneToOne` opcional a `Tecnico`. **Le faltan constructores, getters y setters** — se le quitó Lombok sin reponerlos |
 | `RolUsuario` (enum) | ✅ Completo | ADMIN, ASESOR, GERENTE, TECNICO |
 | `Estado` (enum) | ✅ Completo | ACTIVA, CERRADA, CANCELADA |
 | `EstadoEnvio` (enum) | ✅ Completo | PENDIENTE, ENVIADO, FALLIDO |
@@ -162,22 +217,24 @@ Ingreso a cotizar → Desarme → Latonería → Bancada → Electromecánica
 | `Repuestos` (enum) | ✅ Completo | COMPLETOS, PENDIENTES |
 | `Modulo` | ✅ Completa | PK Long+IDENTITY, `codigo` UNIQUE |
 | `RolModulo` | ✅ Completa | `@ManyToOne` a `Modulo`, enum `rol` reutilizado |
-| `Cliente` | ✅ Completa | `documento` String NOT NULL, `nombreCompleto`, `celular` en E.164 |
-| `Tecnico` | ✅ Completa | Tabla `tecnico` (antes decía `tenico`), `documento` UNIQUE, `correo`/`especialidad` nullable |
-| `Vehiculo` | ✅ Completa | `@ManyToOne` a `Cliente`; `anio` Short NOT NULL; INDEX en `placa` (no UNIQUE) |
-| `Etapas` | ✅ Completa | `orden` Integer sin autoincrement |
-| `OrdenReparacion` | ✅ Completa | 5 FKs + enum `Estado` + 4 fechas `LocalDate` + `cambiarEtapa()`, `asignarTecnico()`, `calcularDiasEnTaller()` |
+| `Cliente` | ✅ Completa | Columnas con sufijo `_cliente`; `documento` (10), `nombreCompleto` (100), `celular` (10), `correo` (100) |
+| `Tecnico` | ✅ Completa | Tabla `tecnico`, `documento` UNIQUE (10), `nombreCompleto` (200), `correo` (50) / `especialidad` (100) nullable |
+| `Vehiculo` | ✅ Completa | `@ManyToOne` a `Cliente`; `anio` Short NOT NULL; `placa` (6), `marca` (20), `modelo` (10), `vin` (100). **INDEX en `placa` eliminado** |
+| `Etapas` | ✅ Completa | `orden` Integer sin autoincrement; `nombre_etapa` (100) |
+| `OrdenReparacion` | ✅ Completa | 5 FKs + enum `Estado` + 4 fechas `LocalDate` + `diasEstimadoEntrega` Byte. **Sin métodos de negocio** |
 | `HistorialEtapas` | ✅ Completa | Log append-only: solo INSERT, nunca UPDATE |
 | `OrdenEtapaFecha` | ✅ Completa | `UNIQUE(id_orden_reparacion, id_etapa)` + flag `completada` |
-| `Valoracion` | ✅ Completa | `@OneToOne` con `id_orden_reparacion` UNIQUE — una sola valoración por orden |
-| `ValoracionDetalle` | ✅ Completa | CHECK `ck_detalle_gravedad` vía `@Table(check = @CheckConstraint(...))` de JPA 3.2 |
-| `ValoracionImagen` | ✅ Completa | `url` pública https (no BLOB): WhatsApp y CESVI la descargan |
-| `Observacion` | ✅ Completa | Tabla compartida por el modal del backlog y la ficha de detalle |
+| `Valoracion` | ✅ Completa | `@OneToOne` con `id_orden_reparacion` UNIQUE; `descripcionGeneral` (500). **Sin cascada** en `detalles`/`imagenes`, sin `marcarCargadaCesvi()` |
+| `ValoracionDetalle` | ✅ Completa | **CHECK `ck_detalle_gravedad` eliminado** — la regla pasa al Service |
+| `ValoracionImagen` | ✅ Completa | `url` pública https (no BLOB), `length = 2083`; `descripcion` (300) |
+| `Observacion` | ✅ Completa | Tabla compartida por el modal del backlog y la ficha de detalle; `nota` (500); única con cascada a `imagenes` |
 | `ImagenObservacion` | ✅ Completa | PK `idImagenesObservacion` (plural, según la guía) |
-| `Notificaciones` | ✅ Completa | `imagenesEnviadas` como columna `JSON`; helpers `marcarEnviada()` / `marcarFallida()` |
+| `Notificaciones` | ✅ Completa | `imagenesEnviadas` como columna `JSON`. **Sin helpers `marcarEnviada()` / `marcarFallida()`**; varias columnas sin `length` |
 | `PlantillaMensaje` | ✅ Completa | Sin FK: la consulta el servicio de notificaciones por `evento` |
 
 Leyenda: ✅ revisada/correcta · 🔶 en progreso · ⏳ pendiente
+
+**Transversal a toda la tabla (refactor del 2026-09-05):** ninguna entidad usa Lombok, ninguna tiene `@PrePersist`/`@PreUpdate` y ninguna tiene métodos de negocio. Todas llevan constructor vacío + constructor completo + getters/setters a mano, **salvo `Usuario`**, que perdió las anotaciones de Lombok y quedó sin ningún accesor (ver Pendientes).
 
 ---
 
@@ -200,11 +257,23 @@ Escala de grises:
 
 ## Pendientes / próximos módulos
 
-La capa de modelo (`gestion.reparabilidad.colision.modelo`) está **completa**: 17 entidades + 7 enums, compilando y con el `EntityManagerFactory` construyendo sin errores. Lo que sigue:
+La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **17 entidades + 7 enums** escritas y el proyecto **compila** (`./mvnw compile` en verde). Tras el refactor del 2026-09-05 quedaron estos huecos que hay que cerrar **antes** de arrancar repositorios y servicios:
+
+0. **Deuda abierta por el refactor (prioridad alta):**
+   - `Usuario` no tiene constructores ni accesores — escribirlos a mano como en el resto de entidades. Compila hoy solo porque nada la consume todavía; cualquier Service o DTO que la use no va a compilar.
+   - Asignar `length` explícito a las columnas que quedaron sin él (`Usuario.nombre`, `Usuario.email`, `Usuario.passwordHash`, y `eventoDisparador`, `canal`, `contenidoEnviado`, `errorDetalle` en `Notificaciones`).
+   - Decidir cómo se llenan `createAt`/`updateAt` ahora que no hay callbacks — son `nullable = false` y hoy nada los asigna.
+   - Reponer (o mover al Service, explícitamente) el CHECK `ck_detalle_gravedad` y el índice sobre `Vehiculo.placa`.
+   - Resolver el conflicto de `celular` `length = 10` vs. formato E.164 que exige WhatsApp.
+   - Decidir si se unifica el nombrado de columnas de `Cliente` (sufijo `_cliente`) con el del resto del modelo.
+   - Confirmar si se quita Lombok del `pom.xml`, ya que ninguna clase lo usa.
+   - Volver a correr la validación sin base de datos (`./mvnw test` con el `application.properties` de prueba) para regenerar `target/schema-modelo.sql` y revisar el DDL con las longitudes nuevas.
+   - Igualar `ImagenObservacion.url` (255) con `ValoracionImagen.url` (2083): guardan el mismo tipo de dato.
+   - `Modulo.codigo` con `length = 10` deja justo a códigos como `DETALLE_OT`; uno más descriptivo ya no entra.
 
 1. **Capa de repositorios**: interfaces `JpaRepository` con los finders que pide la guía (`getVehiculoByPlaca`, `getOrdenReparacionByPlaca`, `getValoracionByOrden`, `getPlantillaByEvento`, `getModuloByRol`, `getEtapasCompletadas(desde, hasta)`).
-2. **Capa de servicios**: los métodos CRUD que la guía lista dentro de cada clase son de Service/Repository, **no** de la entidad. El único que vive en la entidad es la lógica de agregado de `OrdenReparacion`.
-3. `@Transactional` sobre el Service que llama a `OrdenReparacion.cambiarEtapa()` — la guía exige que actualizar `etapaActual` + insertar `HistorialEtapas` + cerrar/abrir `OrdenEtapaFecha` viajen en una sola transacción.
+2. **Capa de servicios**: los métodos CRUD que la guía lista dentro de cada clase son de Service/Repository, **no** de la entidad. Ahora *toda* la lógica va ahí — las entidades quedaron sin comportamiento.
+3. `@Transactional` sobre el Service que hace el cambio de etapa — la guía exige que actualizar `etapaActual` + insertar `HistorialEtapas` + cerrar/abrir `OrdenEtapaFecha` viajen en una sola transacción. La lógica que estaba en `OrdenReparacion.cambiarEtapa()` hay que reescribirla en ese Service.
 4. Regla pendiente de `Observacion`: si la etapa referenciada tiene `fechaInicio = NULL` al crear la observación, el Service debe marcarla con `NOW()` en la misma transacción.
 5. Listener `@Async` de notificaciones WhatsApp + interpolación de `PlantillaMensaje` (`{{cliente}}`, `{{placa}}`, `{{etapa}}`). Un fallo de WhatsApp nunca debe romper la operación principal.
 6. Configuración de MySQL en `application.properties` (hoy solo tiene `spring.application.name`) y decidir migraciones (Flyway/Liquibase) vs `ddl-auto`.
@@ -218,13 +287,25 @@ La capa de modelo (`gestion.reparabilidad.colision.modelo`) está **completa**: 
 
 - `contenidoEnviado` (`Notificaciones`) y `contenidoTemplate` (`PlantillaMensaje`) quedaron en `VARCHAR(255)` porque así los define la guía, pero un mensaje de WhatsApp puede pasarse de 255 y MySQL lo cortaría o lanzaría error de truncado. Evaluar subirlos a `TEXT` (`@Column(columnDefinition = "TEXT")`).
 - Solo se mapearon las relaciones inversas (`@OneToMany`) que hacen falta hoy: `Cliente.vehiculos`, `Vehiculo.ordenesReparacion`, `Modulo.rolesModulo`, `Tecnico.usuario`, `OrdenReparacion.{historialEtapas, ordenEtapaFechas, valoracion}`, `Valoracion.{detalles, imagenes}` y `Observacion.imagenes`. Las demás (ej. `Cliente → Notificaciones`) se consultan por repositorio.
+- Las longitudes nuevas son más estrictas que las de la guía: MySQL **trunca o lanza error de truncado** cuando el dato entrante se pasa. Falta definir la validación en la capa de entrada (Bean Validation `@Size`/`@Pattern` en los DTOs) para que el error se detecte antes de llegar a la base.
 
 ---
 
 ## Cómo trabajar en este proyecto (para Claude Code)
 
-- La guía de referencia **está en la raíz del repo**: `GuiaDiagranaUML.pdf` (18 páginas, con atributos, tipos, restricciones, métodos y reglas de negocio de cada clase). Es la fuente de verdad: ante cualquier diferencia entre este archivo y la guía, **gana la guía**. Para leerla: `pip install pypdf` y extraer el texto con `pypdf.PdfReader`.
-- Antes de generar o corregir una entidad, contrastar contra la guía — no asumir nombres de campos ni cardinalidades sin verificar.
+- La guía de referencia **está en la raíz del repo**: `GuiaDiagranaUML.pdf` (21 páginas, con atributos, tipos, restricciones, métodos y reglas de negocio de cada clase). Para leerla: `pip install pypdf` y extraer el texto con `pypdf.PdfReader`.
+- **La guía se regenera desde código, no se edita a mano.** Su fuente vive en `docs/`:
+  - `docs/contenido_guia.py` — los datos (una función por sección, con las tablas de atributos y métodos de cada clase).
+  - `docs/generar_guia.py` — el layout (estilos, tablas, recuadros, pie de página).
+  ```bash
+  pip install reportlab
+  python docs/generar_guia.py   # reescribe GuiaDiagranaUML.pdf en la raíz
+  ```
+  El PDF original venía de ReportLab pero sin fuente en el repo, así que cada corrección obligaba a rehacerlo entero. Al cambiar una longitud o una regla, se edita `docs/contenido_guia.py` y se regenera.
+- **Precedencia entre documentos:** manda el **código**. Antes la guía era la fuente de verdad, pero desde el refactor del 2026-09-05 las longitudes de columna se ajustaron a la necesidad real del taller y ya no coinciden con el `VARCHAR(255)` original. Si una entidad y la guía difieren, se corrige la guía (regenerándola) y este archivo, no la entidad.
+- Los tres documentos (`CLAUDE.md`, `GuiaDiagranaUML.pdf`, entidades JPA) están sincronizados a 2026-09-05. Al cambiar el modelo hay que actualizar los tres.
+- Antes de generar o corregir una entidad, contrastar contra la guía — no asumir nombres de campos ni cardinalidades sin verificar. **Excepción: las longitudes de columna.** Se ajustaron a la necesidad real del taller y ya no coinciden con el `VARCHAR(255)` de la guía; ahí manda la tabla de la sección "Longitudes de String" y el código.
+- **No reintroducir Lombok** en las entidades: los getters, setters y constructores se escriben a mano (ver sección correspondiente).
 - Los métodos CRUD que la guía lista dentro de cada clase (`createCliente`, `getAllVehiculo`, …) describen la **API del Service/Repository**, no métodos de la entidad JPA. No meterlos dentro de la entidad.
 - **Validar el modelo sin base de datos**: `./mvnw test` con este `src/test/resources/application.properties` construye el `EntityManagerFactory` completo (detecta `mappedBy` mal escritos, FKs rotas, etc.) y exporta el DDL a `target/schema-modelo.sql`, todo sin conectarse a MySQL:
   ```properties
