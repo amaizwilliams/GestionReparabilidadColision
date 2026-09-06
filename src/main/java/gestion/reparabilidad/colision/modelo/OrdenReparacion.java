@@ -24,7 +24,7 @@ public class OrdenReparacion {
     private Vehiculo vehiculo;
 
     @ManyToOne
-    @JoinColumn(name = "id_cliente", referencedColumnName = "id_cliente", nullable = false)
+    @JoinColumn(name = "id_cliente", referencedColumnName = "id_persona", nullable = false)
     private Cliente cliente;
 
     @ManyToOne
@@ -32,7 +32,7 @@ public class OrdenReparacion {
     private Usuario usuarioCreador;
 
     @ManyToOne
-    @JoinColumn(name = "id_tecnico_responsable", referencedColumnName = "id_tecnico")
+    @JoinColumn(name = "id_tecnico_responsable", referencedColumnName = "id_persona")
     private Tecnico tecnicoResponsable;
 
     @ManyToOne

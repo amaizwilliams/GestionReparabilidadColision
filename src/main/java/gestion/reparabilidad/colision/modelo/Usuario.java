@@ -26,12 +26,12 @@ public class Usuario {
     private RolUsuario rol;
 
     @OneToOne
-    @JoinColumn(name = "id_tecnico", referencedColumnName = "id_tecnico")
+    @JoinColumn(name = "id_tecnico", referencedColumnName = "id_persona")
     private Tecnico tecnico;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
     @Column(name = "activo", nullable = false)
-    private boolean activo = true;
+    private Boolean activo = true;
 }

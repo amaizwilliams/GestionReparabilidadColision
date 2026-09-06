@@ -48,7 +48,7 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
 ### Nombres de columnas
 - **snake_case** en la base de datos (`id_cliente`, `nombre_completo`, `create_at`), **camelCase** en Java (`idCliente`, `nombreCompleto`, `createAt`). No mezclar (evitar columnas tipo `createAt` sin snake_case).
 - Los nombres de atributos Java deben coincidir exactamente con los de la guía de referencia (`GuiaDiagranaUML.pdf`) — ej: es `nombreCompleto`, no `nombreCliente`; es `celular`, no `telefono`.
-- **`Cliente` es la excepción a la simetría atributo/columna**: sus columnas llevan sufijo de tabla (`documento_cliente`, `nombre_cliente`, `celular_cliente`, `correo_cliente`) mientras los atributos Java siguen siendo `documento`, `nombreCompleto`, `celular`, `correo`. Ninguna otra entidad usa ese sufijo (`Tecnico` tiene `documento`, `nombre_completo`, `celular`, `correo` sin sufijo). Si aparece una inconsistencia al escribir queries nativas o el DDL, es por esto. Pendiente decidir si se unifica en un sentido o en el otro.
+- **El sufijo de tabla en las columnas de `Cliente` (`documento_cliente`, `nombre_cliente`, …) ya no existe.** Al subir esos campos a `Persona` quedaron como `documento`, `nombre_completo`, `celular`, `correo` en la tabla `persona`, que es el mismo nombrado que ya usaba `Tecnico`. Todo el modelo tiene ahora simetría atributo/columna. Cualquier query nativa vieja que apunte a `cliente.nombre_cliente` está rota — esas columnas viven en `persona`.
 - Nunca declarar un atributo con mayúscula inicial (ej: `private Cliente Cliente;` es incorrecto — debe ser `private Cliente cliente;`).
 
 ### Enums
@@ -69,6 +69,12 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
   ```
   (imports: `org.hibernate.annotations.JdbcTypeCode` y `org.hibernate.type.SqlTypes`)
 - Enums confirmados: `RolUsuario` (ADMIN, ASESOR, GERENTE, TECNICO), `Estado` (ACTIVA, CERRADA, CANCELADA), `EstadoEnvio` (PENDIENTE, ENVIADO, FALLIDO), `Accion` (REPARACION, SUSTITUCION), `Gravedad` (LEVE, MEDIO, FUERTE), `Ubicacion` (EN_TALLER, FUERA_DE_TALLER), `Repuestos` (COMPLETOS, PENDIENTES).
+
+### Tipos primitivos: no usarlos nunca en entidades
+- **Todo atributo de entidad usa el wrapper, nunca el primitivo**: `Boolean` y no `boolean`, `Integer` y no `int`, `Long` y no `long`. Aplica también a los parámetros de constructores y a la firma de getters/setters.
+- El motivo es el mismo que ya justificaba `Long` en las PKs: un primitivo no puede representar "sin valor". Un `boolean` arranca en `false`, que es indistinguible de un `false` real guardado a propósito, y revienta con `NullPointerException` al leer un `NULL` de la base.
+- **Convención de nombre del getter:** con `Boolean` el getter es `getActivo()`, no `isActivo()`. El prefijo `is` es la convención JavaBeans solo para el primitivo `boolean`; dejarlo con el wrapper confunde a herramientas que se apoyan en esa convención.
+- Corregidos el 2026-09-06: `Observacion.visibleCliente`, `PlantillaMensaje.activo`, `Usuario.activo`, `Valoracion.cargadaCesvi` y `Tecnico.activo`. Hoy no queda ningún primitivo en el paquete `modelo`.
 
 ### Getters/setters y constructores (ya no se usa Lombok)
 - **Las entidades ya NO usan Lombok.** Se retiraron `@Getter`, `@Setter`, `@NoArgsConstructor` y sus `import lombok.*` de todo el paquete `modelo`. Cada entidad declara a mano:
@@ -100,14 +106,10 @@ Longitudes vigentes por entidad (estado actual del código):
 
 | Entidad | Columna | length |
 |---|---|---|
-| `Cliente` | `documento_cliente` | 10 |
-| `Cliente` | `nombre_cliente` | 100 |
-| `Cliente` | `celular_cliente` | 10 |
-| `Cliente` | `correo_cliente` | 100 |
-| `Tecnico` | `documento` | 10 |
-| `Tecnico` | `nombre_completo` | 200 |
-| `Tecnico` | `celular` | 10 |
-| `Tecnico` | `correo` | 50 |
+| `Persona` | `documento` | 10 |
+| `Persona` | `nombre_completo` | 200 |
+| `Persona` | `celular` | 16 |
+| `Persona` | `correo` | 100 |
 | `Tecnico` | `especialidad` | 100 |
 | `Vehiculo` | `placa` | 6 |
 | `Vehiculo` | `marca` | 20 |
@@ -128,7 +130,11 @@ Longitudes vigentes por entidad (estado actual del código):
 | `PlantillaMensaje` | `evento`, `canal`, `contenido_template` | 255 |
 
 Notas sobre decisiones puntuales:
-- `celular` en 10 asume el móvil colombiano **sin prefijo internacional** (`3001234567`). Esto es incompatible con guardar E.164 (`+573001234567`, 13 caracteres), que es lo que pide la API de WhatsApp. **Pendiente:** o se sube a `length = 15` y se guarda en E.164, o el Service antepone `+57` al construir el mensaje. Aplica a `Cliente.celular` y `Tecnico.celular`.
+- `celular` está en **16** y guarda **E.164 con el `+` incluido** (`+573045649705`), que es el formato que exige la API de WhatsApp. **Resuelto** — antes estaba en 10, que solo cabía el móvil nacional (`3045649705`) y truncaba el prefijo.
+  - Son 16 y no 15: E.164 permite hasta **15 dígitos** *más* el signo `+`, o sea 16 caracteres. Con 15 un número internacional de largo máximo se truncaría. (Una nota anterior de este archivo proponía 15; era incorrecta.)
+  - Colombia usa 13 de esos 16 (`+57` + 10 dígitos); el margen es para números internacionales.
+  - Vive en un solo sitio, `Persona.celular`, así que aplica por igual a `Cliente` y `Tecnico`.
+  - **Pendiente en la capa de entrada:** el Service o el DTO debe normalizar a E.164 antes de guardar (anteponer `+57` si llega un móvil nacional de 10 dígitos, quitar espacios y guiones). MySQL trunca sin avisar si entra algo más largo.
 - `documento` en 10 cubre cédula colombiana; no alcanza para NIT con dígito de verificación (`900123456-7`, 11 caracteres). Confirmar si el taller factura a empresas.
 - `Vehiculo.placa` en 6 es exacto para placa colombiana (`ABC123` / `ABC12D`), sin guiones. El Service debe normalizar (mayúsculas, sin espacios ni guión) antes de guardar, o el INSERT se trunca.
 - `Vehiculo.modelo` en 10 — si "modelo" es la línea del vehículo (`Sandero Stepway`) se queda corto; si es el año/versión corta, está bien. Verificar contra el uso real.
@@ -139,7 +145,7 @@ Notas sobre decisiones puntuales:
 - Nunca mapear una FK como tipo primitivo (`long idCliente`). Siempre usar el objeto de la entidad relacionada + `@JoinColumn`:
   ```java
   @ManyToOne
-  @JoinColumn(name = "id_cliente", referencedColumnName = "id_cliente", nullable = false)
+  @JoinColumn(name = "id_cliente", referencedColumnName = "id_persona", nullable = false)
   private Cliente cliente;
   ```
 - El lado que tiene la FK físicamente en la base de datos es el dueño de la relación (lleva `@JoinColumn`). El otro lado usa `mappedBy` apuntando al nombre exacto del atributo (no de la columna, no de la clase).
@@ -172,8 +178,19 @@ Cuidado con campos como `documento` (Cliente/Tecnico) o `celular`: aunque parezc
 
 ### Validaciones que ya no están en el esquema
 Se retiraron restricciones que antes generaba el DDL. Ahora **son responsabilidad del Service** (o hay que reponerlas conscientemente):
+- **INDEX `idx_persona_documento`** (no único, agregado el 2026-09-06) sobre `Persona.documento`. Es de rendimiento, no de restricción: el Service consulta por documento en cada alta para detectar duplicados, y sin él esa consulta hace full scan.
+- **UNIQUE sobre `Persona.documento`** (quitado el 2026-09-06). La base **ya no impide** documentos repetidos. El Service tiene que garantizar, antes de cada alta:
+  - que no exista otro **`Cliente`** con ese `documento`;
+  - que no exista otro **`Tecnico`** con ese `documento`;
+  - permitiendo explícitamente un `Cliente` y un `Tecnico` que compartan documento (son la misma persona en dos roles).
+  La consulta es contra la subtabla, no contra `persona` a secas: `SELECT ... FROM cliente c JOIN persona p ON p.id_persona = c.id_persona WHERE p.documento = ?`. Consultar solo `persona` daría falso positivo cuando la persona ya existe en el otro rol.
+  **Límite conocido:** un chequeo en el Service es *check-then-insert* y no es atómico — dos altas simultáneas del mismo documento pueden pasar ambas. Sin índice único en la base no hay forma de cerrarlo del todo; si aparece el problema, tocará serializar esa operación o replantear el modelo.
 - **CHECK `ck_detalle_gravedad`** en `ValoracionDetalle` (`@Table(check = @CheckConstraint(...))` de JPA 3.2). La regla sigue vigente en el negocio: `gravedad` solo aplica con `accion = REPARACION`; con `SUSTITUCION` debe quedar `NULL`. Hoy nada lo impide a nivel de base de datos.
-- **INDEX `idx_vehiculo_placa`** en `Vehiculo.placa`. La búsqueda por placa (`getVehiculoByPlaca`, `getOrdenReparacionByPlaca`) es la consulta más frecuente del sistema y hoy hace full scan. Conviene reponer el índice — no era UNIQUE, y no debe serlo (un vehículo puede volver al taller y las placas se reasignan).
+- ~~INDEX `idx_vehiculo_placa`~~ — **resuelto el 2026-09-06, y con un cambio de criterio**: `Vehiculo.placa` es ahora **UNIQUE** (`unique = true`), no un índice simple. La restricción trae su propio índice, así que resuelve de una vez el rendimiento y la integridad.
+  - Constraint en la base: `uk_vehiculo_placa`. Medido: la búsqueda por placa pasó de `type=ALL` (50.000 filas, ~24,7 ms) a `type=const` sobre el índice (~1,7 ms).
+  - **Esto revierte la nota anterior** que decía "no debe ser UNIQUE porque las placas se reasignan". Se aceptó el UNIQUE a cambio de impedir vehículos duplicados, que es el problema real y frecuente en el mostrador.
+  - **No limita las órdenes de reparación** — confusión fácil y ya verificada: las órdenes cuelgan de `id_vehiculo`, no de la placa. Un vehículo con placa única puede tener N órdenes (`@OneToMany`). Se comprobó con 3 órdenes sobre el mismo vehículo.
+  - **Riesgo asumido — reasignación de placa:** si años después esa placa pasa a otro carro, no se puede crear una segunda fila. Reutilizar la existente cambiando `marca`/`modelo`/`vin` **corrompe el historial**, porque las órdenes viejas siguen apuntando a esa fila y pasarían a describir un vehículo distinto. Si el caso aparece, hay que resolverlo aparte (dar de baja la fila con una marca de estado, o versionar el vehículo), no editándola.
 
 ### Otros
 - `orden` en `Etapas` es `Integer` y **no** lleva `@GeneratedValue` — es un valor de negocio reordenable manualmente (admin puede insertar/reordenar etapas), no una secuencia autogenerada.
@@ -185,7 +202,17 @@ Se retiraron restricciones que antes generaba el DDL. Ahora **son responsabilida
 
 ## Modelo de dominio — decisiones confirmadas
 
-- **`Cliente`** y **`Tecnico`** son clases independientes, **sin** superclase compartida `Persona` (Opción A).
+- **`Cliente`** y **`Tecnico`** heredan de una superclase abstracta **`Persona`** con estrategia **`InheritanceType.JOINED`**. Esto revierte la decisión anterior ("Opción A: clases independientes").
+  - `persona` es una tabla física real con la PK `id_persona` (`Long` + `IDENTITY`) y los cuatro campos compartidos: `documento`, `nombre_completo`, `celular`, `correo`.
+  - `cliente` y `tecnico` son tablas propias cuya PK **es también FK** a `persona.id_persona`, declarada con `@PrimaryKeyJoinColumn(name = "id_persona")`. No se usó `SINGLE_TABLE` (llenaría de columnas nullable) ni `TABLE_PER_CLASS` (rompe el `IDENTITY` y obliga a UNION en las consultas polimórficas).
+  - Consecuencia: **`Cliente` y `Tecnico` ya no tienen PK propia.** Desaparecieron `idCliente` / `idTecnico` y sus accesores; el id se lee con `getIdPersona()` heredado.
+  - `documento` **NO lleva UNIQUE** (decisión del 2026-09-06). Se quitó a propósito para permitir que una misma persona física sea `Cliente` y `Tecnico` a la vez — el caso del dueño-técnico que además lleva su carro al taller.
+    - Un UNIQUE sobre `persona.documento` es global y no distingue subtipo, así que bloqueaba **tres** casos a la vez: dos clientes con el mismo documento, dos técnicos con el mismo documento, y el cliente+técnico que sí se quiere permitir. No hay forma de conservar los dos primeros y soltar el tercero con un solo índice.
+    - Tampoco se puede poner un UNIQUE por subtipo: con `JOINED`, `documento` vive solo en `persona`; las tablas `cliente` y `tecnico` no tienen esa columna, así que no hay dónde indexarla por subtipo sin denormalizar. **Por eso la validación en el Service no es un atajo: es la única opción bajo este modelo.**
+    - Una persona con doble rol se representa como **dos filas en `persona`** (una con su fila en `cliente`, otra con su fila en `tecnico`), no como una sola fila con ambas subtablas colgando. Eso último MySQL lo acepta, pero deja el subtipo ambiguo en `JOINED` y el ORM solo ve uno de los dos roles — **no hacerlo nunca**.
+    - Contrapartida asumida: nombre, celular y correo quedan duplicados en las dos filas y pueden desincronizarse si alguien actualiza solo una.
+  - Las longitudes se unificaron hacia arriba al fusionar: `nombre_completo` queda en 200 (era 100 en `Cliente`, 200 en `Tecnico`) y `correo` en 100 (era 100 en `Cliente`, 50 en `Tecnico`). Al unificar nunca se recorta longitud.
+  - Las FKs que apuntan a `Cliente`/`Tecnico` conservan su nombre de columna local (`id_cliente`, `id_tecnico`, `id_tecnico_responsable`) pero su **`referencedColumnName` es ahora `id_persona`**, porque es el nombre real de la PK en las tablas `cliente` y `tecnico`. Aplica a `Vehiculo`, `Usuario`, `OrdenReparacion` (×2), `OrdenEtapaFecha` y `Notificaciones`.
 - La asignación de técnico vive a **nivel de etapa** (`OrdenEtapaFecha.idTecnico`), no en `OrdenReparacion` directamente. `OrdenReparacion.idTecnicoResponsable` es el responsable general de la OT (opcional), distinto del técnico que trabajó cada etapa puntual.
 - **`ubicacion`** y **`estadoRepuestos`** viven en `Observacion`, no en `OrdenReparacion` (así lo define la guía: son el estado *al momento de dejar la nota*). La idea previa de un `ubicacionActual` en `OrdenReparacion` como fuente de verdad **no** está en la guía y no se implementó; si se quiere ese campo denormalizado hay que decidirlo y agregarlo aparte.
 - Rol **RECEPCIONISTA** fue renombrado a **ASESOR**.
@@ -217,9 +244,10 @@ Ingreso a cotizar → Desarme → Latonería → Bancada → Electromecánica
 | `Repuestos` (enum) | ✅ Completo | COMPLETOS, PENDIENTES |
 | `Modulo` | ✅ Completa | PK Long+IDENTITY, `codigo` UNIQUE |
 | `RolModulo` | ✅ Completa | `@ManyToOne` a `Modulo`, enum `rol` reutilizado |
-| `Cliente` | ✅ Completa | Columnas con sufijo `_cliente`; `documento` (10), `nombreCompleto` (100), `celular` (10), `correo` (100) |
-| `Tecnico` | ✅ Completa | Tabla `tecnico`, `documento` UNIQUE (10), `nombreCompleto` (200), `correo` (50) / `especialidad` (100) nullable |
-| `Vehiculo` | ✅ Completa | `@ManyToOne` a `Cliente`; `anio` Short NOT NULL; `placa` (6), `marca` (20), `modelo` (10), `vin` (100). **INDEX en `placa` eliminado** |
+| `Persona` | ✅ Completa | **Nueva.** Abstracta, `@Inheritance(JOINED)`, tabla `persona`. PK `idPersona`; `documento` (10, **sin UNIQUE** — se valida en el Service), `nombreCompleto` (200), `celular` (16, E.164), `correo` (100) nullable |
+| `Cliente` | ✅ Completa | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. Solo conserva `createAt`, `updateAt` y `@OneToMany vehiculos`. **Sin `idCliente`** — el id se hereda |
+| `Tecnico` | ✅ Completa | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. Solo conserva `especialidad` (100), `activo`, `createAt`, `updateAt` y `@OneToOne usuario`. **Sin `idTecnico`** — el id se hereda |
+| `Vehiculo` | ✅ Completa | `@ManyToOne` a `Cliente`; `anio` Short NOT NULL; `placa` (6) **UNIQUE** (`uk_vehiculo_placa`), `marca` (20), `modelo` (10), `vin` (100) |
 | `Etapas` | ✅ Completa | `orden` Integer sin autoincrement; `nombre_etapa` (100) |
 | `OrdenReparacion` | ✅ Completa | 5 FKs + enum `Estado` + 4 fechas `LocalDate` + `diasEstimadoEntrega` Byte. **Sin métodos de negocio** |
 | `HistorialEtapas` | ✅ Completa | Log append-only: solo INSERT, nunca UPDATE |
@@ -257,15 +285,24 @@ Escala de grises:
 
 ## Pendientes / próximos módulos
 
-La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **17 entidades + 7 enums** escritas y el proyecto **compila** (`./mvnw compile` en verde). Tras el refactor del 2026-09-05 quedaron estos huecos que hay que cerrar **antes** de arrancar repositorios y servicios:
+La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entidades (17 concretas + la abstracta `Persona`) + 7 enums** escritas y el proyecto **compila** (`./mvnw compile` en verde). Tras el refactor del 2026-09-05 quedaron estos huecos que hay que cerrar **antes** de arrancar repositorios y servicios:
 
 0. **Deuda abierta por el refactor (prioridad alta):**
    - `Usuario` no tiene constructores ni accesores — escribirlos a mano como en el resto de entidades. Compila hoy solo porque nada la consume todavía; cualquier Service o DTO que la use no va a compilar.
    - Asignar `length` explícito a las columnas que quedaron sin él (`Usuario.nombre`, `Usuario.email`, `Usuario.passwordHash`, y `eventoDisparador`, `canal`, `contenidoEnviado`, `errorDetalle` en `Notificaciones`).
    - Decidir cómo se llenan `createAt`/`updateAt` ahora que no hay callbacks — son `nullable = false` y hoy nada los asigna.
-   - Reponer (o mover al Service, explícitamente) el CHECK `ck_detalle_gravedad` y el índice sobre `Vehiculo.placa`.
-   - Resolver el conflicto de `celular` `length = 10` vs. formato E.164 que exige WhatsApp.
-   - Decidir si se unifica el nombrado de columnas de `Cliente` (sufijo `_cliente`) con el del resto del modelo.
+   - Reponer (o mover al Service, explícitamente) el CHECK `ck_detalle_gravedad`. ~~y el índice sobre `Vehiculo.placa`~~ — **hecho**: quedó como UNIQUE `uk_vehiculo_placa`.
+   - ~~Resolver el conflicto de `celular` `length = 10` vs. formato E.164~~ — **resuelto**: `Persona.celular` quedó en 16 y guarda E.164 con `+`. Queda pendiente la normalización en el Service/DTO.
+   - ~~Decidir si se unifica el nombrado de columnas de `Cliente` (sufijo `_cliente`)~~ — **resuelto** por el refactor a `Persona`: esas columnas viven ahora en `persona` sin sufijo.
+   - ~~Confirmar el UNIQUE de `Persona.documento`~~ — **decidido el 2026-09-06: se quitó.** Queda la deuda de implementar la validación equivalente en el Service (ver "Validaciones que ya no están en el esquema").
+   - **Qué hace y qué no hace `ddl-auto=update`** (verificado contra MySQL en este proyecto):
+     - **Sí** crea tablas y columnas que faltan, **sí** crea las FKs, y **sí ensancha** una columna existente (se comprobó `alter table persona modify column celular varchar(16) not null` al subir `celular` de 10 a 16).
+     - **Sí** crea un índice declarado con `@Index` que falte (verificado: `create index idx_persona_documento` sobre la tabla `persona` ya existente).
+     - **No** agrega un `UNIQUE` a una tabla ya creada (verificado: `unique = true` en `Vehiculo.placa` no produjo ningún DDL; hubo que ejecutar `ALTER TABLE vehiculo ADD CONSTRAINT uk_vehiculo_placa UNIQUE (placa)` a mano).
+     - **No** borra ni renombra nada, y **no** angosta una columna. Una columna que se quita de la entidad se queda en la tabla; un `length` que se reduce no se aplica.
+     - Ojo: Hibernate ejecuta el schema update **antes** de que Tomcat falle por el puerto ocupado. Un arranque que "falla" con `Port 8080 was already in use` **ya modificó la base**. No asumir que un arranque fallido dejó el esquema intacto.
+     - Sobre una base **vacía** (o recién borrada) `update` equivale a un `create` limpio: emite el `CREATE TABLE` completo sin residuos.
+     - Por eso, tras un refactor que **quita o renombra** columnas, la única forma limpia con `update` es borrar la base y dejar que se regenere (funciona porque hay `createDatabaseIfNotExist=true` en la URL). Cuando haya datos reales, esto deja de ser viable y toca Flyway/Liquibase.
    - Confirmar si se quita Lombok del `pom.xml`, ya que ninguna clase lo usa.
    - Volver a correr la validación sin base de datos (`./mvnw test` con el `application.properties` de prueba) para regenerar `target/schema-modelo.sql` y revisar el DDL con las longitudes nuevas.
    - Igualar `ImagenObservacion.url` (255) con `ValoracionImagen.url` (2083): guardan el mismo tipo de dato.

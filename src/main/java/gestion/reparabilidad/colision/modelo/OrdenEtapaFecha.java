@@ -21,7 +21,7 @@ public class OrdenEtapaFecha {
     private Etapas etapa;
 
     @ManyToOne
-    @JoinColumn(name = "id_tecnico", referencedColumnName = "id_tecnico")
+    @JoinColumn(name = "id_tecnico", referencedColumnName = "id_persona")
     private Tecnico tecnico;
 
     @Column(name = "fecha_inicio")

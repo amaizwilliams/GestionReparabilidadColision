@@ -14,10 +14,10 @@ public class Vehiculo {
     private Long idVehiculo;
 
     @ManyToOne
-    @JoinColumn(name = "id_cliente", referencedColumnName = "id_cliente", nullable = false)
+    @JoinColumn(name = "id_cliente", referencedColumnName = "id_persona", nullable = false)
     private Cliente cliente;
 
-    @Column(name = "placa", length = 6, nullable = false)
+    @Column(name = "placa", length = 6, nullable = false, unique = true)
     private String placa;
 
     @Column(name = "marca", length = 20, nullable = false)

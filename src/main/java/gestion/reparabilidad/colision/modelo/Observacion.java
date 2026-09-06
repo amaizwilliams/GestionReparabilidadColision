@@ -45,7 +45,7 @@ public class Observacion {
     private String nota;
 
     @Column(name = "visible_cliente", nullable = false)
-    private boolean visibleCliente = true;
+    private Boolean visibleCliente = true;
 
     @Column(name = "create_at", nullable = false)
     private LocalDateTime createAt;
@@ -53,7 +53,7 @@ public class Observacion {
     @OneToMany(mappedBy = "observacion", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ImagenObservacion> imagenes = new ArrayList<>();
 
-    public Observacion(Long idObservacion, OrdenReparacion ordenReparacion, Usuario usuario, Etapas etapa, Ubicacion ubicacion, Repuestos estadoRepuestos, String nota, boolean visibleCliente, LocalDateTime createAt, List<ImagenObservacion> imagenes) {
+    public Observacion(Long idObservacion, OrdenReparacion ordenReparacion, Usuario usuario, Etapas etapa, Ubicacion ubicacion, Repuestos estadoRepuestos, String nota, Boolean visibleCliente, LocalDateTime createAt, List<ImagenObservacion> imagenes) {
         this.idObservacion = idObservacion;
         this.ordenReparacion = ordenReparacion;
         this.usuario = usuario;
@@ -125,11 +125,11 @@ public class Observacion {
         this.nota = nota;
     }
 
-    public boolean isVisibleCliente() {
+    public Boolean getVisibleCliente() {
         return visibleCliente;
     }
 
-    public void setVisibleCliente(boolean visibleCliente) {
+    public void setVisibleCliente(Boolean visibleCliente) {
         this.visibleCliente = visibleCliente;
     }
 

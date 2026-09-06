@@ -31,7 +31,7 @@ public class Valoracion {
     private BigDecimal costoEstimado;
 
     @Column(name = "cargada_cesvi", nullable = false)
-    private boolean cargadaCesvi = false;
+    private Boolean cargadaCesvi = false;
 
     @Column(name = "cargada_cesvi_at")
     private LocalDateTime cargadaCesviAt;
@@ -51,7 +51,7 @@ public class Valoracion {
     public Valoracion() {
     }
 
-    public Valoracion(Long idValoracion, gestion.reparabilidad.colision.modelo.OrdenReparacion ordenReparacion, gestion.reparabilidad.colision.modelo.Usuario usuario, String descripcionGeneral, BigDecimal costoEstimado, boolean cargadaCesvi, LocalDateTime cargadaCesviAt, LocalDateTime createAt, LocalDateTime updateAt, List<ValoracionDetalle> detalles, List<ValoracionImagen> imagenes) {
+    public Valoracion(Long idValoracion, gestion.reparabilidad.colision.modelo.OrdenReparacion ordenReparacion, gestion.reparabilidad.colision.modelo.Usuario usuario, String descripcionGeneral, BigDecimal costoEstimado, Boolean cargadaCesvi, LocalDateTime cargadaCesviAt, LocalDateTime createAt, LocalDateTime updateAt, List<ValoracionDetalle> detalles, List<ValoracionImagen> imagenes) {
         this.idValoracion = idValoracion;
         this.ordenReparacion = ordenReparacion;
         this.usuario = usuario;
@@ -106,11 +106,11 @@ public class Valoracion {
         this.costoEstimado = costoEstimado;
     }
 
-    public boolean isCargadaCesvi() {
+    public Boolean getCargadaCesvi() {
         return cargadaCesvi;
     }
 
-    public void setCargadaCesvi(boolean cargadaCesvi) {
+    public void setCargadaCesvi(Boolean cargadaCesvi) {
         this.cargadaCesvi = cargadaCesvi;
     }
 

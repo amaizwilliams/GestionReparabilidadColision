@@ -21,9 +21,9 @@ public class PlantillaMensaje {
     private String contenidoTemplate;
 
     @Column(name = "activo", nullable = false)
-    private boolean activo = true;
+    private Boolean activo = true;
 
-    public PlantillaMensaje(Long idPlantillaMensaje, String evento, String canal, String contenidoTemplate, boolean activo) {
+    public PlantillaMensaje(Long idPlantillaMensaje, String evento, String canal, String contenidoTemplate, Boolean activo) {
         this.idPlantillaMensaje = idPlantillaMensaje;
         this.evento = evento;
         this.canal = canal;
@@ -66,11 +66,11 @@ public class PlantillaMensaje {
         this.contenidoTemplate = contenidoTemplate;
     }
 
-    public boolean isActivo() {
+    public Boolean getActivo() {
         return activo;
     }
 
-    public void setActivo(boolean activo) {
+    public void setActivo(Boolean activo) {
         this.activo = activo;
     }
 }
