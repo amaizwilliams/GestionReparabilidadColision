@@ -68,7 +68,8 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
   private RolUsuario rol;
   ```
   (imports: `org.hibernate.annotations.JdbcTypeCode` y `org.hibernate.type.SqlTypes`)
-- Enums confirmados: `RolUsuario` (ADMIN, ASESOR, GERENTE, TECNICO), `Estado` (ACTIVA, CERRADA, CANCELADA), `EstadoEnvio` (PENDIENTE, ENVIADO, FALLIDO), `Accion` (REPARACION, SUSTITUCION), `Gravedad` (LEVE, MEDIO, FUERTE), `Ubicacion` (EN_TALLER, FUERA_DE_TALLER), `Repuestos` (COMPLETOS, PENDIENTES).
+- Enums confirmados: `RolUsuario` (ADMIN, ASESOR, GERENTE, TECNICO), `Estado` (ACTIVA, CERRADA, CANCELADA), `EstadoEnvio` (PENDIENTE, ENVIADO, FALLIDO), `Accion` (REPARACION, SUSTITUCION), `Gravedad` (LEVE, MEDIO, FUERTE), `Ubicacion` (EN_TALLER, FUERA_DE_TALLER), `Repuestos` (COMPLETOS, PENDIENTES), `Especialidad` (ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD), `UbicacionActual` (EN_TALLER, FUERA_DE_TALLER).
+- **Nota:** `UbicacionActual` y `Ubicacion` tienen los mismos valores pero son enums distintos — `Ubicacion` se usa en `Observacion` (histórico al dejar la nota), `UbicacionActual` se usa en `OrdenReparacion` (fuente de verdad actual). Pendiente evaluar si se unifican en uno solo.
 
 ### Tipos primitivos: no usarlos nunca en entidades
 - **Todo atributo de entidad usa el wrapper, nunca el primitivo**: `Boolean` y no `boolean`, `Integer` y no `int`, `Long` y no `long`. Aplica también a los parámetros de constructores y a la firma de getters/setters.
@@ -110,7 +111,7 @@ Longitudes vigentes por entidad (estado actual del código):
 | `Persona` | `nombre_completo` | 200 |
 | `Persona` | `celular` | 16 |
 | `Persona` | `correo` | 100 |
-| `Tecnico` | `especialidad` | 100 |
+| `Tecnico` | `especialidad` | 20 (enum `Especialidad`) |
 | `Vehiculo` | `placa` | 6 |
 | `Vehiculo` | `marca` | 20 |
 | `Vehiculo` | `modelo` | 10 |
@@ -135,7 +136,7 @@ Notas sobre decisiones puntuales:
   - Colombia usa 13 de esos 16 (`+57` + 10 dígitos); el margen es para números internacionales.
   - Vive en un solo sitio, `Persona.celular`, así que aplica por igual a `Cliente` y `Tecnico`.
   - **Pendiente en la capa de entrada:** el Service o el DTO debe normalizar a E.164 antes de guardar (anteponer `+57` si llega un móvil nacional de 10 dígitos, quitar espacios y guiones). MySQL trunca sin avisar si entra algo más largo.
-- `documento` en 10 cubre cédula colombiana; no alcanza para NIT con dígito de verificación (`900123456-7`, 11 caracteres). Confirmar si el taller factura a empresas.
+- `documento` en 10 cubre cédula colombiana. **Resuelto:** el MVP solo maneja personas naturales con cédula — no se necesita NIT. El `length = 10` se queda.
 - `Vehiculo.placa` en 6 es exacto para placa colombiana (`ABC123` / `ABC12D`), sin guiones. El Service debe normalizar (mayúsculas, sin espacios ni guión) antes de guardar, o el INSERT se trunca.
 - `Vehiculo.modelo` en 10 — si "modelo" es la línea del vehículo (`Sandero Stepway`) se queda corto; si es el año/versión corta, está bien. Verificar contra el uso real.
 - `ValoracionImagen.url` en 2083 es el límite práctico de URL de los navegadores. Nota: MySQL con `utf8mb4` **no permite indexar** una columna así completa (2083 × 4 bytes supera el límite de índice), así que no se le puede poner UNIQUE sin prefijo de índice.
@@ -213,8 +214,9 @@ Se retiraron restricciones que antes generaba el DDL. Ahora **son responsabilida
     - Contrapartida asumida: nombre, celular y correo quedan duplicados en las dos filas y pueden desincronizarse si alguien actualiza solo una.
   - Las longitudes se unificaron hacia arriba al fusionar: `nombre_completo` queda en 200 (era 100 en `Cliente`, 200 en `Tecnico`) y `correo` en 100 (era 100 en `Cliente`, 50 en `Tecnico`). Al unificar nunca se recorta longitud.
   - Las FKs que apuntan a `Cliente`/`Tecnico` conservan su nombre de columna local (`id_cliente`, `id_tecnico`, `id_tecnico_responsable`) pero su **`referencedColumnName` es ahora `id_persona`**, porque es el nombre real de la PK en las tablas `cliente` y `tecnico`. Aplica a `Vehiculo`, `Usuario`, `OrdenReparacion` (×2), `OrdenEtapaFecha` y `Notificaciones`.
-- La asignación de técnico vive a **nivel de etapa** (`OrdenEtapaFecha.idTecnico`), no en `OrdenReparacion` directamente. `OrdenReparacion.idTecnicoResponsable` es el responsable general de la OT (opcional), distinto del técnico que trabajó cada etapa puntual.
-- **`ubicacion`** y **`estadoRepuestos`** viven en `Observacion`, no en `OrdenReparacion` (así lo define la guía: son el estado *al momento de dejar la nota*). La idea previa de un `ubicacionActual` en `OrdenReparacion` como fuente de verdad **no** está en la guía y no se implementó; si se quiere ese campo denormalizado hay que decidirlo y agregarlo aparte.
+- La asignación de técnico vive **exclusivamente a nivel de etapa** (`OrdenEtapaFecha.idTecnico`). **Se eliminó `OrdenReparacion.idTecnicoResponsable`** — ya no existe un "técnico responsable general" de la OT; toda la asignación es por etapa.
+- **Se agregó `OrdenReparacion.idUsuarioCreador`** (FK a `Usuario`): se llena automáticamente una sola vez al crear la orden. Es el usuario que registró la OT. Es distinto de "Asesor de la orden" que se muestra en la pestaña Información (este último se deriva del último `HistorialEtapas.idUsuario`, no es un campo almacenado).
+- **`ubicacion`** y **`estadoRepuestos`** viven en `Observacion` (son el estado *al momento de dejar la nota*). **Además**, `OrdenReparacion` ahora tiene un campo `ubicacionActual` (`UbicacionActual`: `EN_TALLER` | `FUERA_DE_TALLER`) como **fuente de verdad** para el Dashboard de Alertas. Se sincroniza automáticamente en tres casos: (1) al registrar una `Observacion` con ubicación, (2) al marcar `fechaIngresoReparacion` → `EN_TALLER`, (3) al pasar a la etapa "Entregado" → `FUERA_DE_TALLER`.
 - Rol **RECEPCIONISTA** fue renombrado a **ASESOR**.
 - **`TECNICO`** no tiene login al sistema web en el MVP — existe solo como entidad de catálogo para asignación en etapas y futuro cálculo de pagos. (`Usuario.idTecnico` permite vincular un técnico a un usuario *si* ese técnico sí necesita login, ej. rol GERENTE/ADMIN que también es técnico).
 - **CESVI** se trackea de forma independiente vía `Valoracion.cargadaCesvi` (boolean) + `cargadaCesviAt`. Se marca manualmente desde la UI, no automáticamente.
@@ -224,9 +226,34 @@ Se retiraron restricciones que antes generaba el DDL. Ahora **son responsabilida
 
 ### Flujo de etapas (Kanban)
 ```
-Ingreso a cotizar → Desarme → Latonería → Bancada → Electromecánica
+[Asignado] → Desarme → Latonería → Bancada → Electromecánica
 → Pintura → Armado → Control de calidad → Listo para entregar → Entregado
 ```
+- **"Asignado" no es una etapa real** del catálogo `Etapas` — es un estado calculado que aparece como primera columna del Kanban. Muestra órdenes con `fechaIngresoReparacion` marcada pero `idEtapaActual` todavía `NULL`. Al mover la tarjeta de "Asignado" a "Desarme", se crea el primer registro real de etapa.
+- **"Ingreso a cotizar" ya no es una etapa del Kanban** — es una fecha del ciclo de vida (`fechaIngresoCotizar`) que se marca desde la pestaña Reparación o al crear una valoración.
+- **Movimiento libre hacia adelante** (puede saltar etapas), pero **bloqueado hacia etapas ya visitadas** (validación contra `HistorialEtapas` completo). Las columnas ya visitadas se muestran visualmente deshabilitadas al arrastrar.
+- **Técnico obligatorio** al mover tarjeta: el modal de cambio de etapa exige seleccionar un técnico (del catálogo `Tecnico`, no texto libre) antes de guardar.
+- **`Vehiculo.idCliente` es de una sola escritura**: se asigna al registrar el vehículo por primera vez y nunca se actualiza después. El cliente real de cada reparación puntual se lee siempre de `OrdenReparacion.idCliente`.
+
+### Fechas del ciclo de vida (no son etapas)
+Las siguientes fechas se marcan desde la pestaña "Reparación" de la Ficha de Orden, como fichas visuales separadas de las etapas. No son parte del flujo Kanban:
+- **`fechaIngresoCotizar`** — se puede marcar también al crear una valoración.
+- **`fechaIngresoReparacion`** — al marcarse, actualiza `ubicacionActual = EN_TALLER` y la orden aparece en "Asignado".
+- **`diasEstimadoEntrega`** — se marca una sola vez (no editable después). Genera `fechaDeEntregaEstimada = fechaIngresoReparacion + diasEstimadoEntrega`.
+
+### Alertas de entrega (Dashboard)
+- **Críticos**: superaron el umbral de días-en-etapa (umbral individual por etapa, requiere nuevo atributo en `Etapas`).
+- **Vencidos**: `fechaDeEntregaEstimada` ya pasó y la orden no está Entregada.
+- **Próximos a vencer**: ≤3 días para `fechaDeEntregaEstimada` (constante en código para el MVP).
+- **En proceso**: activas dentro de plazo.
+- Una orden puede estar en varias alertas simultáneamente, **excepto** que Vencida siempre excluye a Crítica.
+- **Color de tarjeta** en el Kanban (misma lógica): rojo = Crítico O Vencido, naranja = Próximo a vencer, normal = ninguno.
+
+### Movimientos Recientes (Dashboard)
+Muestra los eventos de las últimas 24h (solo 5 visibles + botón "Ver más"): creación de orden, cambio de etapa, valoración cargada, nueva observación, marcado de fecha, marcado de CESVI. Excluye "notificación enviada" como evento independiente.
+
+### Carga por Etapa (Dashboard)
+Solo muestra 6 etapas: Latonería, Pintura, Desarme, Electromecánica, Armado, Control de calidad. Excluye Ingreso a cotizar, Asignado, Listo para entregar, Entregado.
 
 ---
 
@@ -242,15 +269,17 @@ Ingreso a cotizar → Desarme → Latonería → Bancada → Electromecánica
 | `Gravedad` (enum) | ✅ Completo | LEVE, MEDIO, FUERTE |
 | `Ubicacion` (enum) | ✅ Completo | EN_TALLER, FUERA_DE_TALLER |
 | `Repuestos` (enum) | ✅ Completo | COMPLETOS, PENDIENTES |
+| `Especialidad` (enum) | ✅ Completo | ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD |
+| `UbicacionActual` (enum) | ✅ Completo | EN_TALLER, FUERA_DE_TALLER (nota: duplica valores de `Ubicacion` — pendiente evaluar unificación) |
 | `Modulo` | ✅ Completa | PK Long+IDENTITY, `codigo` UNIQUE |
 | `RolModulo` | ✅ Completa | `@ManyToOne` a `Modulo`, enum `rol` reutilizado |
 | `Persona` | ✅ Completa | **Nueva.** Abstracta, `@Inheritance(JOINED)`, tabla `persona`. PK `idPersona`; `documento` (10, **sin UNIQUE** — se valida en el Service), `nombreCompleto` (200), `celular` (16, E.164), `correo` (100) nullable |
 | `Cliente` | ✅ Completa | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. Solo conserva `createAt`, `updateAt` y `@OneToMany vehiculos`. **Sin `idCliente`** — el id se hereda |
-| `Tecnico` | ✅ Completa | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. Solo conserva `especialidad` (100), `activo`, `createAt`, `updateAt` y `@OneToOne usuario`. **Sin `idTecnico`** — el id se hereda |
-| `Vehiculo` | ✅ Completa | `@ManyToOne` a `Cliente`; `anio` Short NOT NULL; `placa` (6) **UNIQUE** (`uk_vehiculo_placa`), `marca` (20), `modelo` (10), `vin` (100) |
-| `Etapas` | ✅ Completa | `orden` Integer sin autoincrement; `nombre_etapa` (100) |
-| `OrdenReparacion` | ✅ Completa | 5 FKs + enum `Estado` + 4 fechas `LocalDate` + `diasEstimadoEntrega` Byte. **Sin métodos de negocio** |
-| `HistorialEtapas` | ✅ Completa | Log append-only: solo INSERT, nunca UPDATE |
+| `Tecnico` | 🔶 Pendiente cambio | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. `especialidad` **ahora es enum `Especialidad`** (ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD), ya no texto libre. `activo`, `createAt`, `updateAt` y `@OneToOne usuario`. **Sin `idTecnico`** — el id se hereda |
+| `Vehiculo` | 🔶 Pendiente cambio | `@ManyToOne` a `Cliente`; `anio` Short **nullable** (cambio del 2026-09-11); `placa` (6) **UNIQUE** (`uk_vehiculo_placa`), `marca` (20), `modelo` (10), `vin` (100) nullable. **`idCliente` es de una sola escritura** — se asigna al crear y no se modifica después |
+| `Etapas` | 🔶 Pendiente cambio | `orden` Integer sin autoincrement; `nombre_etapa` (100). **Falta agregar atributo de días límite** para el cálculo de alertas "Críticos" por etapa |
+| `OrdenReparacion` | 🔶 Pendiente cambio | Cambios del 2026-09-11: **se eliminó `idTecnicoResponsable`**, **se agregó `idUsuarioCreador`** (FK a `Usuario`, se llena auto al crear), **se agregó `ubicacionActual`** (enum `UbicacionActual`). `cambiarEtapa(idEtapa, idUsuario, idTecnico)`. **Sin métodos de negocio** |
+| `HistorialEtapas` | 🔶 Pendiente cambio | Log append-only. **Se eliminó el campo `comentario`** — las notas viven en `Observacion` (ruta única) |
 | `OrdenEtapaFecha` | ✅ Completa | `UNIQUE(id_orden_reparacion, id_etapa)` + flag `completada` |
 | `Valoracion` | ✅ Completa | `@OneToOne` con `id_orden_reparacion` UNIQUE; `descripcionGeneral` (500). **Sin cascada** en `detalles`/`imagenes`, sin `marcarCargadaCesvi()` |
 | `ValoracionDetalle` | ✅ Completa | **CHECK `ck_detalle_gravedad` eliminado** — la regla pasa al Service |
@@ -315,7 +344,7 @@ La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entid
 5. Listener `@Async` de notificaciones WhatsApp + interpolación de `PlantillaMensaje` (`{{cliente}}`, `{{placa}}`, `{{etapa}}`). Un fallo de WhatsApp nunca debe romper la operación principal.
 6. Configuración de MySQL en `application.properties` (hoy solo tiene `spring.application.name`) y decidir migraciones (Flyway/Liquibase) vs `ddl-auto`.
 7. Módulo de **Valoración**: export PDF de la hoja y ZIP de fotos generados al vuelo para CESVI.
-8. **Ficha de Orden de Trabajo** — pendiente de analizar.
+8. **Ficha de Orden de Trabajo** — **analizada el 2026-09-11**: 5 pestañas (Información, Reparación, Valoración, Observaciones, Fotografías). Ver sección "Módulos analizados" más abajo.
 9. Documentación formal (Reglas de Negocio numeradas, Escenarios, Historias de Usuario, criterios de aceptación).
 10. Fase futura: rol de técnico de campo con acceso web/móvil; cálculo de pagos por etapa sobre `OrdenEtapaFecha.idTecnico`.
 11. Nombre final del proyecto — aún abierto.
@@ -325,6 +354,75 @@ La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entid
 - `contenidoEnviado` (`Notificaciones`) y `contenidoTemplate` (`PlantillaMensaje`) quedaron en `VARCHAR(255)` porque así los define la guía, pero un mensaje de WhatsApp puede pasarse de 255 y MySQL lo cortaría o lanzaría error de truncado. Evaluar subirlos a `TEXT` (`@Column(columnDefinition = "TEXT")`).
 - Solo se mapearon las relaciones inversas (`@OneToMany`) que hacen falta hoy: `Cliente.vehiculos`, `Vehiculo.ordenesReparacion`, `Modulo.rolesModulo`, `Tecnico.usuario`, `OrdenReparacion.{historialEtapas, ordenEtapaFechas, valoracion}`, `Valoracion.{detalles, imagenes}` y `Observacion.imagenes`. Las demás (ej. `Cliente → Notificaciones`) se consultan por repositorio.
 - Las longitudes nuevas son más estrictas que las de la guía: MySQL **trunca o lanza error de truncado** cuando el dato entrante se pasa. Falta definir la validación en la capa de entrada (Bean Validation `@Size`/`@Pattern` en los DTOs) para que el error se detecte antes de llegar a la base.
+
+---
+
+## Módulos analizados (sesiones de análisis de requisitos, 2026-09-10/11)
+
+La documentación formal (RN, EC, HU, criterios de aceptación) se elaborará al cerrar todos los módulos. Esta sección recoge las decisiones confirmadas por módulo.
+
+### Dashboard de Alertas
+- 6 tarjetas clicables: Vehículos en Taller, Fuera del Taller, Críticos, Vencidos, Próximos a Vencer, En Proceso. Clic en la tarjeta navega a lista filtrada (no hay botón "Ver en backlog").
+- "Vehículos en Taller" muestra dato adicional "+X ingresos hoy"; los demás sub-datos del prototipo fueron errores de maqueta.
+- Solapamiento de alertas permitido, excepto Vencida siempre excluye Crítica.
+- Umbral de Críticos: individual por etapa (requiere atributo en `Etapas`). Próximos a vencer: 3 días fijos (constante en código para MVP).
+- Movimientos Recientes: 6 tipos de evento, últimas 24h, 5 visibles + "Ver más".
+- Carga por Etapa: solo 6 etapas (Latonería, Pintura, Desarme, Electromecánica, Armado, Control de calidad).
+- Acceso: todos los roles con acceso al módulo pueden ver el dashboard.
+
+### Backlog Kanban
+- Columna calculada "Asignado" (no etapa real) + 9 etapas del catálogo (Desarme → Entregado).
+- Movimiento libre hacia adelante, bloqueado hacia etapas ya visitadas (validación contra `HistorialEtapas`, Opción A). Columnas bloqueadas se muestran visualmente deshabilitadas al arrastrar (Opción B UX).
+- Tarjeta muestra: placa, marca/modelo/año, cliente, "X días aquí" (con color de alerta), número de OT. Color: rojo (crítico/vencido), naranja (próximo a vencer), normal.
+- Modal de cambio de etapa: técnico obligatorio (del catálogo `Tecnico`, FK), nota opcional (crea `Observacion` con `ubicacion=EN_TALLER`), checkbox notificar al cliente. Un solo botón "Guardar". La nota se guarda en la misma tabla `Observacion` que la pestaña Observaciones — ruta única.
+- Notificación: si hay nota + checkbox marcado, se envía un solo mensaje combinado (cambio de etapa + nota). Sin límite de mensajes. El campo `visibleCliente` de la `Observacion` creada refleja el estado del checkbox.
+- `cambiarEtapa()` en dos fases: (1) transaccional (BD): actualizar `idEtapaActual` + insertar `HistorialEtapas` + cerrar/abrir `OrdenEtapaFecha` con técnico + crear `Observacion` si hay nota; (2) asíncrona: envío WhatsApp (`@Async`, fallo no hace rollback).
+- Acceso: ADMIN, ASESOR, GERENTE. TECNICO no tiene acceso al módulo.
+
+### Ficha de Orden de Trabajo (5 pestañas)
+
+**Pestaña Información:**
+- 4 bloques: Vehículo (marca, modelo, año, placa, color), Cliente (nombre, documento, celular, correo — leído desde `OrdenReparacion.idCliente`), Etapa actual (etapa, técnico de etapa, "desde", asesor de la orden = último `HistorialEtapas.idUsuario`), Entrega (ingreso, estimada, días en taller, estado).
+- "Días en taller" = desde `fechaIngresoReparacion` hasta hoy. Si no hay `fechaIngresoReparacion`, se muestra vacío/0.
+
+**Pestaña Reparación:**
+- 3 fichas superiores (fechas del ciclo de vida): Ingreso a cotizar, Ingreso al taller, Días estimados de entrega. Se marcan una sola vez, sin edición posterior, con confirmación previa. Solo tienen botón de calendario (marca fecha), excepto "Días estimados" que es un campo numérico sin botón de calendario.
+- `diasEstimadoEntrega` se marca después de `fechaIngresoReparacion`. No es editable después. `fechaDeEntregaEstimada = fechaIngresoReparacion + diasEstimadoEntrega`.
+- 9 fichas de etapas reales (Desarme → Entregado): muestran nombre, técnico asignado, fecha, estado visual (verde completada, naranja en curso, gris pendiente). Solo tienen botón de lápiz → abre el mismo modal de cambio de etapa del Kanban (técnico obligatorio + nota opcional + notificar opcional).
+
+**Pestaña Valoración:**
+- Placeholder — se definirá con el módulo de Valoración completo.
+- Debe mostrar la hoja de valoración, permitir edición, y descargar PDF + ZIP de fotos.
+
+**Pestaña Observaciones:**
+- Lista única que mezcla observaciones de todos los orígenes (Kanban, pestaña Reparación, esta misma pestaña) sin distinción visual de origen.
+- Formulario de nueva observación: selector de etapa (solo etapas ya visitadas, según `HistorialEtapas`), texto de nota, adjuntar imágenes (sin límite), checkbox notificar al cliente. `ubicacion` se asigna automáticamente como `EN_TALLER`.
+- Se muestra: autor, fecha/hora, badge "ENVIADO AL CLIENTE CON X FOTOS" si `visibleCliente=true`, texto de la nota.
+
+**Pestaña Fotografías:**
+- Solo lectura — no se pueden agregar fotos desde aquí (el botón "+ Agregar" del prototipo queda descartado).
+- Muestra todas las fotos de la orden: las de Valoración y las de Observaciones.
+- Cada foto indica su origen: "Valoración" o el nombre de la etapa a la que pertenece la observación.
+
+### Nueva Orden
+- Acceso: todos los roles excepto TECNICO.
+- Formulario progresivo (un solo formulario que se va revelando, no pantallas separadas):
+  1. Campo placa → auto-búsqueda al completar 6 caracteres.
+  2. Si placa existe: muestra datos del vehículo y cliente vinculado. Pregunta "¿Es quien trae el vehículo?". Si "Sí" → formulario completo, solo falta confirmar. Si "No" → revela campo Documento.
+  3. Si placa no existe: revela campo Documento directamente.
+  4. Documento → auto-búsqueda. Si existe: muestra nombre (solo lectura). Si no existe: revela campos de cliente nuevo (nombre, celular, correo).
+  5. Si placa no existía: campos de vehículo nuevo (marca, modelo, año, color). VIN y año son opcionales.
+  6. Un solo botón "Crear orden".
+- 4 combinaciones según existencia de placa/documento (qué se crea: Persona+Cliente, Vehiculo, OrdenReparacion).
+- `Vehiculo.placa` es UNIQUE. `Vehiculo.idCliente` es de una sola escritura (se asigna al crear el vehículo, nunca se actualiza — el cliente de cada reparación se lee de `OrdenReparacion.idCliente`).
+- Estado inicial: `Estado.ACTIVA`. Numeración: correlativo simple desde 1, sin prefijo (el `idOrdenReparacion` del AUTO_INCREMENT es el número de OT).
+- `documento` solo acepta cédula colombiana (length 10, sin NIT).
+- `idUsuarioCreador` se llena automáticamente con el usuario que crea la orden.
+
+### Módulos pendientes de análisis
+- **Valoración**: módulo completo (incluye pestaña dentro de la Ficha y sección propia del menú lateral). Export PDF + ZIP para CESVI.
+- **Técnicos**: pantalla de gestión del catálogo (CRUD).
+- **Clientes**: marcado como "PRÓXIMO" en el menú — fuera del MVP.
 
 ---
 
