@@ -227,13 +227,32 @@ Se retiraron restricciones que antes generaba el DDL. Ahora **son responsabilida
 ### Flujo de etapas (Kanban)
 ```
 [Asignado] → Desarme → Latonería → Bancada → Electromecánica
-→ Pintura → Armado → Control de calidad → Listo para entregar → Entregado
+→ Alistamiento de superficies → Pintura → Armado → Control de calidad
+→ Listo para entregar → Entregado
 ```
 - **"Asignado" no es una etapa real** del catálogo `Etapas` — es un estado calculado que aparece como primera columna del Kanban. Muestra órdenes con `fechaIngresoReparacion` marcada pero `idEtapaActual` todavía `NULL`. Al mover la tarjeta de "Asignado" a "Desarme", se crea el primer registro real de etapa.
 - **"Ingreso a cotizar" ya no es una etapa del Kanban** — es una fecha del ciclo de vida (`fechaIngresoCotizar`) que se marca desde la pestaña Reparación o al crear una valoración.
+- **"Alistamiento de superficies"** se agregó el 2026-09-11, entre Electromecánica y Pintura — prepara la superficie de la pieza antes de pintarla. Son **10 etapas reales** en total.
 - **Movimiento libre hacia adelante** (puede saltar etapas), pero **bloqueado hacia etapas ya visitadas** (validación contra `HistorialEtapas` completo). Las columnas ya visitadas se muestran visualmente deshabilitadas al arrastrar.
-- **Técnico obligatorio** al mover tarjeta: el modal de cambio de etapa exige seleccionar un técnico (del catálogo `Tecnico`, no texto libre) antes de guardar.
+- **Técnico obligatorio** al mover tarjeta, **excepto hacia Bancada** (esa etapa no lleva técnico — el modal no muestra el campo). El desplegable de técnico se filtra por la especialidad de la etapa destino (ver "Mapeo Especialidad → Etapa").
 - **`Vehiculo.idCliente` es de una sola escritura**: se asigna al registrar el vehículo por primera vez y nunca se actualiza después. El cliente real de cada reparación puntual se lee siempre de `OrdenReparacion.idCliente`.
+
+### Mapeo Especialidad → Etapa
+
+Cada etapa de trabajo real tiene asociada una especialidad específica del enum `Especialidad`. En el modal de cambio de etapa, el selector de técnico se filtra automáticamente para mostrar solo los técnicos `activo=true` cuya `especialidad` corresponda a la etapa destino — la asignación sigue siendo manual (el asesor elige entre los filtrados); la autoasignación por el propio técnico queda para una fase futura.
+
+| Etapa | Especialidad requerida |
+|---|---|
+| Desarme | ARMADOR |
+| Latonería | LATONERO |
+| Bancada | *(ninguna — no lleva técnico)* |
+| Electromecánica | MECANICO |
+| Alistamiento de superficies | ALISTADOR |
+| Pintura | PINTOR |
+| Armado | ARMADOR |
+| Control de calidad | CONTROL_CALIDAD |
+
+`ARMADOR` cubre dos etapas a propósito (Desarme y Armado) — es la misma persona la que desarma y luego arma el vehículo.
 
 ### Fechas del ciclo de vida (no son etapas)
 Las siguientes fechas se marcan desde la pestaña "Reparación" de la Ficha de Orden, como fichas visuales separadas de las etapas. No son parte del flujo Kanban:
@@ -242,18 +261,36 @@ Las siguientes fechas se marcan desde la pestaña "Reparación" de la Ficha de O
 - **`diasEstimadoEntrega`** — se marca una sola vez (no editable después). Genera `fechaDeEntregaEstimada = fechaIngresoReparacion + diasEstimadoEntrega`.
 
 ### Alertas de entrega (Dashboard)
-- **Críticos**: superaron el umbral de días-en-etapa (umbral individual por etapa, requiere nuevo atributo en `Etapas`).
+- **Críticos**: superaron el umbral de días-en-etapa (umbral individual por etapa — ver "Días límite por etapa", ya definido con valores reales).
 - **Vencidos**: `fechaDeEntregaEstimada` ya pasó y la orden no está Entregada.
 - **Próximos a vencer**: ≤3 días para `fechaDeEntregaEstimada` (constante en código para el MVP).
 - **En proceso**: activas dentro de plazo.
 - Una orden puede estar en varias alertas simultáneamente, **excepto** que Vencida siempre excluye a Crítica.
 - **Color de tarjeta** en el Kanban (misma lógica): rojo = Crítico O Vencido, naranja = Próximo a vencer, normal = ninguno.
 
+### Días límite por etapa (alertas "Crítico")
+
+Definido el 2026-09-13. Consecuencia técnica: nuevo atributo `Etapas.diasLimiteCritico` (`Short`, nullable) con estos valores:
+
+| Etapa | Días límite |
+|---|---|
+| Desarme | 2 |
+| Latonería | 3 |
+| Bancada | 1 |
+| Electromecánica | 5 |
+| Alistamiento de superficies | 2 |
+| Pintura | 4 |
+| Armado | 2 |
+| Control de calidad | 1 |
+| Listo para entregar | 2 |
+
+`Entregado` queda sin umbral (`NULL`) — es la etapa terminal, no aplica alertar por tiempo excesivo ahí.
+
 ### Movimientos Recientes (Dashboard)
 Muestra los eventos de las últimas 24h (solo 5 visibles + botón "Ver más"): creación de orden, cambio de etapa, valoración cargada, nueva observación, marcado de fecha, marcado de CESVI. Excluye "notificación enviada" como evento independiente.
 
 ### Carga por Etapa (Dashboard)
-Solo muestra 6 etapas: Latonería, Pintura, Desarme, Electromecánica, Armado, Control de calidad. Excluye Ingreso a cotizar, Asignado, Listo para entregar, Entregado.
+Muestra 7 etapas: Latonería, Pintura, Desarme, Electromecánica, Armado, Control de calidad, y **Alistamiento de superficies** (agregada el 2026-09-11). Excluye Ingreso a cotizar, Asignado, Listo para entregar, Entregado.
 
 ---
 
@@ -277,7 +314,7 @@ Solo muestra 6 etapas: Latonería, Pintura, Desarme, Electromecánica, Armado, C
 | `Cliente` | ✅ Completa | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. Solo conserva `createAt`, `updateAt` y `@OneToMany vehiculos`. **Sin `idCliente`** — el id se hereda |
 | `Tecnico` | 🔶 Pendiente cambio | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. `especialidad` **ahora es enum `Especialidad`** (ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD), ya no texto libre. `activo`, `createAt`, `updateAt` y `@OneToOne usuario`. **Sin `idTecnico`** — el id se hereda |
 | `Vehiculo` | 🔶 Pendiente cambio | `@ManyToOne` a `Cliente`; `anio` Short **nullable** (cambio del 2026-09-11); `placa` (6) **UNIQUE** (`uk_vehiculo_placa`), `marca` (20), `modelo` (10), `vin` (100) nullable. **`idCliente` es de una sola escritura** — se asigna al crear y no se modifica después |
-| `Etapas` | 🔶 Pendiente cambio | `orden` Integer sin autoincrement; `nombre_etapa` (100). **Falta agregar atributo de días límite** para el cálculo de alertas "Críticos" por etapa |
+| `Etapas` | 🔶 Pendiente cambio | `orden` Integer sin autoincrement; `nombre_etapa` (100). **Falta agregar `diasLimiteCritico`** (`Short`) — los 9 valores ya están definidos (ver "Días límite por etapa"). **Falta insertar la fila "Alistamiento de superficies"** en el catálogo (10 etapas reales en total) |
 | `OrdenReparacion` | 🔶 Pendiente cambio | Cambios del 2026-09-11: **se eliminó `idTecnicoResponsable`**, **se agregó `idUsuarioCreador`** (FK a `Usuario`, se llena auto al crear), **se agregó `ubicacionActual`** (enum `UbicacionActual`). `cambiarEtapa(idEtapa, idUsuario, idTecnico)`. **Sin métodos de negocio** |
 | `HistorialEtapas` | 🔶 Pendiente cambio | Log append-only. **Se eliminó el campo `comentario`** — las notas viven en `Observacion` (ruta única) |
 | `OrdenEtapaFecha` | ✅ Completa | `UNIQUE(id_orden_reparacion, id_etapa)` + flag `completada` |
@@ -314,7 +351,7 @@ Escala de grises:
 
 ## Pendientes / próximos módulos
 
-La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entidades (17 concretas + la abstracta `Persona`) + 7 enums** escritas y el proyecto **compila** (`./mvnw compile` en verde). Tras el refactor del 2026-09-05 quedaron estos huecos que hay que cerrar **antes** de arrancar repositorios y servicios:
+La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entidades (17 concretas + la abstracta `Persona`) + 9 enums** escritas y el proyecto **compila** (`./mvnw compile` en verde). Tras el refactor del 2026-09-05 quedaron estos huecos que hay que cerrar **antes** de arrancar repositorios y servicios:
 
 0. **Deuda abierta por el refactor (prioridad alta):**
    - `Usuario` no tiene constructores ni accesores — escribirlos a mano como en el resto de entidades. Compila hoy solo porque nada la consume todavía; cualquier Service o DTO que la use no va a compilar.
@@ -343,21 +380,27 @@ La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entid
 4. Regla pendiente de `Observacion`: si la etapa referenciada tiene `fechaInicio = NULL` al crear la observación, el Service debe marcarla con `NOW()` en la misma transacción.
 5. Listener `@Async` de notificaciones WhatsApp + interpolación de `PlantillaMensaje` (`{{cliente}}`, `{{placa}}`, `{{etapa}}`). Un fallo de WhatsApp nunca debe romper la operación principal.
 6. Configuración de MySQL en `application.properties` (hoy solo tiene `spring.application.name`) y decidir migraciones (Flyway/Liquibase) vs `ddl-auto`.
-7. Módulo de **Valoración**: export PDF de la hoja y ZIP de fotos generados al vuelo para CESVI.
+7. Módulo de **Valoración** — **analizado el 2026-09-13**: pantalla propia con búsqueda por placa + 3 filtros, más la pestaña homónima de la Ficha (misma pantalla reutilizada). Export PDF de la hoja y ZIP de fotos generados al vuelo para CESVI. Ver sección "Módulos analizados" más abajo.
 8. **Ficha de Orden de Trabajo** — **analizada el 2026-09-11**: 5 pestañas (Información, Reparación, Valoración, Observaciones, Fotografías). Ver sección "Módulos analizados" más abajo.
 9. Documentación formal (Reglas de Negocio numeradas, Escenarios, Historias de Usuario, criterios de aceptación).
 10. Fase futura: rol de técnico de campo con acceso web/móvil; cálculo de pagos por etapa sobre `OrdenEtapaFecha.idTecnico`.
 11. Nombre final del proyecto — aún abierto.
+12. **Deuda de código de las sesiones 2026-09-11/13** (Técnicos, Usuarios, Valoración — analizadas en requisitos, pendientes en código):
+    - Agregar `Etapas.diasLimiteCritico` (`Short`, `NULL` para `Entregado`) con los 9 valores ya definidos (ver "Días límite por etapa").
+    - Insertar la fila **"Alistamiento de superficies"** en el catálogo `Etapas`, entre Electromecánica y Pintura.
+    - Aplicar en la clase `Tecnico` el cambio de `especialidad` de texto libre a enum `Especialidad` (ya reflejado en las tablas de este archivo, falta en la entidad real).
+    - Entidad/pantalla `Usuario`: la lógica de negocio ya quedó completamente definida (ver "Módulos analizados"), pero sigue pendiente el punto 0 (constructores/accesores).
 
 ### Decisiones que quedaron abiertas en el modelo
 
 - `contenidoEnviado` (`Notificaciones`) y `contenidoTemplate` (`PlantillaMensaje`) quedaron en `VARCHAR(255)` porque así los define la guía, pero un mensaje de WhatsApp puede pasarse de 255 y MySQL lo cortaría o lanzaría error de truncado. Evaluar subirlos a `TEXT` (`@Column(columnDefinition = "TEXT")`).
 - Solo se mapearon las relaciones inversas (`@OneToMany`) que hacen falta hoy: `Cliente.vehiculos`, `Vehiculo.ordenesReparacion`, `Modulo.rolesModulo`, `Tecnico.usuario`, `OrdenReparacion.{historialEtapas, ordenEtapaFechas, valoracion}`, `Valoracion.{detalles, imagenes}` y `Observacion.imagenes`. Las demás (ej. `Cliente → Notificaciones`) se consultan por repositorio.
 - Las longitudes nuevas son más estrictas que las de la guía: MySQL **trunca o lanza error de truncado** cuando el dato entrante se pasa. Falta definir la validación en la capa de entrada (Bean Validation `@Size`/`@Pattern` en los DTOs) para que el error se detecte antes de llegar a la base.
+- `ValoracionImagen.descripcion` (300) queda sin uso funcional en el flujo de Valoración definido el 2026-09-13 — las fotos se guardan sin descripción. Se conserva en el modelo por si sirve a futuro, decisión explícita de Adrian.
 
 ---
 
-## Módulos analizados (sesiones de análisis de requisitos, 2026-09-10/11)
+## Módulos analizados (sesiones de análisis de requisitos, 2026-09-10 al 13)
 
 La documentación formal (RN, EC, HU, criterios de aceptación) se elaborará al cerrar todos los módulos. Esta sección recoge las decisiones confirmadas por módulo.
 
@@ -371,10 +414,10 @@ La documentación formal (RN, EC, HU, criterios de aceptación) se elaborará al
 - Acceso: todos los roles con acceso al módulo pueden ver el dashboard.
 
 ### Backlog Kanban
-- Columna calculada "Asignado" (no etapa real) + 9 etapas del catálogo (Desarme → Entregado).
+- Columna calculada "Asignado" (no etapa real) + 10 etapas del catálogo (Desarme → Entregado, incluida "Alistamiento de superficies" entre Electromecánica y Pintura).
 - Movimiento libre hacia adelante, bloqueado hacia etapas ya visitadas (validación contra `HistorialEtapas`, Opción A). Columnas bloqueadas se muestran visualmente deshabilitadas al arrastrar (Opción B UX).
 - Tarjeta muestra: placa, marca/modelo/año, cliente, "X días aquí" (con color de alerta), número de OT. Color: rojo (crítico/vencido), naranja (próximo a vencer), normal.
-- Modal de cambio de etapa: técnico obligatorio (del catálogo `Tecnico`, FK), nota opcional (crea `Observacion` con `ubicacion=EN_TALLER`), checkbox notificar al cliente. Un solo botón "Guardar". La nota se guarda en la misma tabla `Observacion` que la pestaña Observaciones — ruta única.
+- Modal de cambio de etapa: técnico obligatorio (del catálogo `Tecnico`, FK, filtrado por la especialidad que corresponde a la etapa destino — ver "Mapeo Especialidad → Etapa"), **excepto hacia Bancada** (no lleva técnico). Nota opcional (crea `Observacion` con `ubicacion=EN_TALLER`), checkbox notificar al cliente. Un solo botón "Guardar". La nota se guarda en la misma tabla `Observacion` que la pestaña Observaciones — ruta única.
 - Notificación: si hay nota + checkbox marcado, se envía un solo mensaje combinado (cambio de etapa + nota). Sin límite de mensajes. El campo `visibleCliente` de la `Observacion` creada refleja el estado del checkbox.
 - `cambiarEtapa()` en dos fases: (1) transaccional (BD): actualizar `idEtapaActual` + insertar `HistorialEtapas` + cerrar/abrir `OrdenEtapaFecha` con técnico + crear `Observacion` si hay nota; (2) asíncrona: envío WhatsApp (`@Async`, fallo no hace rollback).
 - Acceso: ADMIN, ASESOR, GERENTE. TECNICO no tiene acceso al módulo.
@@ -388,11 +431,10 @@ La documentación formal (RN, EC, HU, criterios de aceptación) se elaborará al
 **Pestaña Reparación:**
 - 3 fichas superiores (fechas del ciclo de vida): Ingreso a cotizar, Ingreso al taller, Días estimados de entrega. Se marcan una sola vez, sin edición posterior, con confirmación previa. Solo tienen botón de calendario (marca fecha), excepto "Días estimados" que es un campo numérico sin botón de calendario.
 - `diasEstimadoEntrega` se marca después de `fechaIngresoReparacion`. No es editable después. `fechaDeEntregaEstimada = fechaIngresoReparacion + diasEstimadoEntrega`.
-- 9 fichas de etapas reales (Desarme → Entregado): muestran nombre, técnico asignado, fecha, estado visual (verde completada, naranja en curso, gris pendiente). Solo tienen botón de lápiz → abre el mismo modal de cambio de etapa del Kanban (técnico obligatorio + nota opcional + notificar opcional).
+- 10 fichas de etapas reales (Desarme → Entregado, incluida Alistamiento de superficies): muestran nombre, técnico asignado, fecha, estado visual (verde completada, naranja en curso, gris pendiente). Solo tienen botón de lápiz → abre el mismo modal de cambio de etapa del Kanban (técnico obligatorio, salvo Bancada, + nota opcional + notificar opcional).
 
 **Pestaña Valoración:**
-- Placeholder — se definirá con el módulo de Valoración completo.
-- Debe mostrar la hoja de valoración, permitir edición, y descargar PDF + ZIP de fotos.
+- **Ya no es placeholder** (analizada el 2026-09-13) — es la misma pantalla que el módulo Valoración del menú lateral (ver sección "Valoración" más abajo), reutilizada aquí. Mismo enrutamiento: sin valoración → hoja vacía para crear; con valoración → vista PDF + descarga ZIP, con botón Editar hacia la hoja.
 
 **Pestaña Observaciones:**
 - Lista única que mezcla observaciones de todos los orígenes (Kanban, pestaña Reparación, esta misma pestaña) sin distinción visual de origen.
@@ -419,10 +461,47 @@ La documentación formal (RN, EC, HU, criterios de aceptación) se elaborará al
 - `documento` solo acepta cédula colombiana (length 10, sin NIT).
 - `idUsuarioCreador` se llena automáticamente con el usuario que crea la orden.
 
+### Técnicos
+- Pantalla de catálogo (CRUD), separada de la pantalla de Usuarios (login).
+- Acceso: `ADMIN` y `GERENTE` con CRUD completo (crear, editar, desactivar, reactivar). `ASESOR` solo puede ver la lista, sin acceso al formulario. `TECNICO` sin acceso.
+- Formulario "Registrar Técnico": nombre completo, documento, celular, especialidad (desplegable del enum `Especialidad`). **`correo` no se pide — queda `NULL`**, se completa después si hace falta.
+- "Eliminar" = desactivar (`activo = false`). El técnico deja de aparecer en la lista, pero el registro y su historial en `OrdenEtapaFecha`/`HistorialEtapas` no se tocan. Sin restricción ni reasignación forzada de órdenes en curso al desactivar — quedan con ese técnico (ya inactivo) hasta que la orden cambie de etapa, momento en que el modal obliga a elegir un técnico activo.
+- Existe botón de **reactivar** (`activo` vuelve a `true` sobre el mismo registro, sin crear uno nuevo).
+- Columna "En curso" de la lista = cantidad de `OrdenEtapaFecha` abiertas (sin `fechaFin`) asignadas a ese técnico específico — no la carga total de su etapa.
+- Botones Editar y Eliminar por fila (agregados al prototipo original, que no los tenía).
+- Ver "Mapeo Especialidad → Etapa" en "Modelo de dominio" para la relación completa especialidad↔etapa.
+
+### Usuarios
+- **Módulo nuevo, no estaba en el menú original** — pantalla separada de Técnicos, para las cuentas de login al sistema (`Usuario`).
+- Acceso: únicamente `ADMIN` y `GERENTE`, con CRUD completo. Ningún otro rol tiene acceso (a diferencia de Técnicos, aquí no hay nivel de "solo lectura" para `ASESOR`).
+- La contraseña la asigna quien crea el usuario (`ADMIN`/`GERENTE`) — no hay autoregistro ni enlace de activación. **No existe "cambiar mi propia contraseña"** en el MVP; si alguien la olvida, un `ADMIN`/`GERENTE` se la reasigna.
+- Reseteo de contraseña: mismo formulario de Editar, con un campo de "nueva contraseña" opcional (vacío = no cambiar). No hay pantalla ni botón separado para esto.
+- "Eliminar" = desactivar (cambia el estado/`activo`) — el usuario desactivado no puede iniciar sesión, el registro no se borra.
+- El desplegable de rol **no ofrece `TECNICO`** — esa versión del rol no está disponible todavía (fase futura del técnico de campo). Solo se ofrecen `ADMIN`, `ASESOR`, `GERENTE`.
+- `Usuario.idTecnico` (vínculo opcional a un `Tecnico` para el caso de doble rol) **queda fuera de alcance del formulario por ahora** — se conecta más adelante, cuando el rol Técnico de Campo tenga su propio acceso.
+- Consecuencia técnica ya anotada: como la contraseña se guarda con hash (`passwordHash`), ni siquiera quien la asignó puede volver a verla — solo reasignar una nueva.
+
+### Valoración
+- Se integra con **CESVI Colombia**. La idea del taller es dejar de valorar en hoja física y hacerlo en el sistema.
+- Pantalla propia en el menú: encabezado de búsqueda por placa + lista con **3 filtros**: **Sin valorar** (orden sin fila en `Valoracion`, sin importar la etapa), **Sin cargar a CESVI** (`Valoracion` existe, `cargadaCesvi=false`), **Cargadas a CESVI** (`cargadaCesvi=true`).
+- **Enrutamiento al entrar a una orden** (igual desde este módulo o desde la pestaña Valoración de la Ficha — es la misma pantalla): sin valoración → entra directo a "la hoja" vacía; con valoración existente → vista PDF de la hoja + botón para descargar el ZIP de fotos, con un botón "Editar" que lleva a "la hoja" precargada.
+- **"Cargada a CESVI" es un botón manual** en la vista PDF (marca `cargadaCesvi=true` + `cargadaCesviAt=now()`). Editar la valoración después de marcada **no** resetea ni afecta este estado de ninguna forma automática — es responsabilidad humana notar si algo cambió tras subir a CESVI.
+- **"La hoja"** (crear/editar): descripción general + lista de piezas + fotos.
+  - Piezas: texto libre (sin catálogo predefinido), con `accion` (REPARAR/SUSTITUIR) y `gravedad` (solo si `accion=REPARACION`). Se muestran **agrupadas por acción — SUSTITUIR arriba, REPARAR abajo** — y ordenadas **alfabéticamente por `pieza`** dentro de cada grupo (no por orden de captura; no requiere campo `orden` nuevo).
+  - Fotos: relacionadas únicamente con `Valoracion` (no con una pieza puntual). **Sin descripción** — el prototipo mostraba etiquetas por foto que no fueron solicitadas, se descartan. Sin límite de cantidad. Se pueden tomar directamente desde la web (cámara) o subir archivos existentes.
+  - Guardado en un solo bloque: todo (descripción + piezas + fotos) se persiste de una vez al presionar "Guardar", no hay guardado incremental por acción.
+  - **No se puede guardar una valoración vacía** — debe tener al menos un ítem (`ValoracionDetalle`) cargado.
+- Acceso: `ADMIN`, `ASESOR`, `GERENTE` pueden crear, editar y marcar "cargada a CESVI". `TECNICO` sin acceso.
+- **Conexión con el ciclo de vida**: si se guarda la primera valoración de una orden que todavía no tiene `fechaIngresoCotizar`, esa fecha se marca automáticamente en ese momento (sin que el asesor tenga que ir aparte a la pestaña Reparación).
+- `ValoracionImagen.descripcion` queda sin uso funcional en este flujo — se conserva en el modelo por si sirve a futuro.
+
 ### Módulos pendientes de análisis
-- **Valoración**: módulo completo (incluye pestaña dentro de la Ficha y sección propia del menú lateral). Export PDF + ZIP para CESVI.
-- **Técnicos**: pantalla de gestión del catálogo (CRUD).
-- **Clientes**: marcado como "PRÓXIMO" en el menú — fuera del MVP.
+Con Técnicos, Usuarios y Valoración cerrados, **no queda ningún módulo funcional del MVP pendiente de análisis**. Lo único fuera de alcance:
+- **Clientes**: marcado como "PRÓXIMO" en el menú — confirmado fuera del MVP.
+
+Transversal, ya conocido desde antes:
+- Documentación formal (RN, EC, HU, criterios de aceptación) — pospuesta a propósito hasta cerrar todos los módulos (ya se cerraron).
+- Enums `Ubicacion`/`UbicacionActual` duplicados — pendiente evaluar unificación, sin urgencia.
 
 ---
 
@@ -438,7 +517,7 @@ La documentación formal (RN, EC, HU, criterios de aceptación) se elaborará al
   ```
   El PDF original venía de ReportLab pero sin fuente en el repo, así que cada corrección obligaba a rehacerlo entero. Al cambiar una longitud o una regla, se edita `docs/contenido_guia.py` y se regenera.
 - **Precedencia entre documentos:** manda el **código**. Antes la guía era la fuente de verdad, pero desde el refactor del 2026-09-05 las longitudes de columna se ajustaron a la necesidad real del taller y ya no coinciden con el `VARCHAR(255)` original. Si una entidad y la guía difieren, se corrige la guía (regenerándola) y este archivo, no la entidad.
-- Los tres documentos (`CLAUDE.md`, `GuiaDiagranaUML.pdf`, entidades JPA) están sincronizados a 2026-09-05. Al cambiar el modelo hay que actualizar los tres.
+- **Estado de sincronización:** este archivo se actualizó por última vez el 2026-09-13, incorporando las decisiones de las sesiones de análisis de requisitos (2026-09-06 al 13: reinstalación de `Persona`, especialidad como enum, nueva etapa "Alistamiento de superficies", módulos Técnicos/Usuarios/Valoración). `GuiaDiagranaUML.pdf` y las entidades JPA reales **no** se han verificado contra estos cambios — no asumir que están sincronizados hasta confirmarlo contra el código y regenerar la guía si hace falta.
 - Antes de generar o corregir una entidad, contrastar contra la guía — no asumir nombres de campos ni cardinalidades sin verificar. **Excepción: las longitudes de columna.** Se ajustaron a la necesidad real del taller y ya no coinciden con el `VARCHAR(255)` de la guía; ahí manda la tabla de la sección "Longitudes de String" y el código.
 - **No reintroducir Lombok** en las entidades: los getters, setters y constructores se escriben a mano (ver sección correspondiente).
 - Los métodos CRUD que la guía lista dentro de cada clase (`createCliente`, `getAllVehiculo`, …) describen la **API del Service/Repository**, no métodos de la entidad JPA. No meterlos dentro de la entidad.
