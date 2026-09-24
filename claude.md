@@ -47,7 +47,7 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
 
 ### Nombres de columnas
 - **snake_case** en la base de datos (`id_cliente`, `nombre_completo`, `create_at`), **camelCase** en Java (`idCliente`, `nombreCompleto`, `createAt`). No mezclar (evitar columnas tipo `createAt` sin snake_case).
-- Los nombres de atributos Java deben coincidir exactamente con los de la guía de referencia (`GuiaDiagranaUML.pdf`) — ej: es `nombreCompleto`, no `nombreCliente`; es `celular`, no `telefono`.
+- Los nombres de atributos Java deben coincidir exactamente con los de la guía de referencia — ej: es `nombreCompleto`, no `nombreCliente`; es `celular`, no `telefono`. **Nota:** el PDF `GuiaDiagranaUML.pdf` ya no está en el repo (ver "Cómo trabajar en este proyecto"); la fuente de verdad hoy es `docs/contenido_guia.py`.
 - **El sufijo de tabla en las columnas de `Cliente` (`documento_cliente`, `nombre_cliente`, …) ya no existe.** Al subir esos campos a `Persona` quedaron como `documento`, `nombre_completo`, `celular`, `correo` en la tabla `persona`, que es el mismo nombrado que ya usaba `Tecnico`. Todo el modelo tiene ahora simetría atributo/columna. Cualquier query nativa vieja que apunte a `cliente.nombre_cliente` está rota — esas columnas viven en `persona`.
 - Nunca declarar un atributo con mayúscula inicial (ej: `private Cliente Cliente;` es incorrecto — debe ser `private Cliente cliente;`).
 
@@ -68,8 +68,12 @@ Estas reglas se han corregido repetidamente durante el desarrollo — **aplícal
   private RolUsuario rol;
   ```
   (imports: `org.hibernate.annotations.JdbcTypeCode` y `org.hibernate.type.SqlTypes`)
-- Enums confirmados: `RolUsuario` (ADMIN, ASESOR, GERENTE, TECNICO), `Estado` (ACTIVA, CERRADA, CANCELADA), `EstadoEnvio` (PENDIENTE, ENVIADO, FALLIDO), `Accion` (REPARACION, SUSTITUCION), `Gravedad` (LEVE, MEDIO, FUERTE), `Ubicacion` (EN_TALLER, FUERA_DE_TALLER), `Repuestos` (COMPLETOS, PENDIENTES), `Especialidad` (ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD), `UbicacionActual` (EN_TALLER, FUERA_DE_TALLER).
-- **Nota:** `UbicacionActual` y `Ubicacion` tienen los mismos valores pero son enums distintos — `Ubicacion` se usa en `Observacion` (histórico al dejar la nota), `UbicacionActual` se usa en `OrdenReparacion` (fuente de verdad actual). Pendiente evaluar si se unifican en uno solo.
+- Enums que **ya existen en código** (`modelo/Enums`, 7 en total): `RolUsuario` (ADMIN, ASESOR, GERENTE, TECNICO), `Estado` (ACTIVA, CERRADA, CANCELADA), `EstadoEnvio` (PENDIENTE, ENVIADO, FALLIDO), `Accion` (REPARACION, SUSTITUCION), `Gravedad` (LEVE, MEDIO, FUERTE), `Ubicacion` (EN_TALLER, FUERA_DE_TALLER), `Repuestos` (COMPLETOS, PENDIENTES).
+- **`Especialidad`** (ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD) **ya existe en código** (creado el 2026-09-23) y `Tecnico.especialidad` ya es de ese tipo, con `@Enumerated(STRING)` + `@JdbcTypeCode(VARCHAR)` + `length = 20` + `nullable = false`.
+  - Los valores van en **MAYÚSCULAS_CON_GUION_BAJO**, igual que el resto de enums. Con `EnumType.STRING` el texto de la base se compara exacto contra el nombre de la constante: una primera versión con `Armador` / `ControlDeCalidad` rompía la lectura de las filas ya guardadas como `LATONERO` / `CONTROL_CALIDAD` (`No enum constant ...`). Es `CONTROL_CALIDAD`, no `CONTROL_DE_CALIDAD`.
+  - **Pendiente en la base:** la columna `tecnico.especialidad` sigue como `varchar(100) NULL` (verificado 2026-09-23) — `ddl-auto=update` no angosta ni agrega `NOT NULL` a una columna existente. Para igualarla a la entidad: `ALTER TABLE tecnico MODIFY especialidad VARCHAR(20) NOT NULL;` (seguro mientras ninguna fila tenga `especialidad` en `NULL`).
+- **`UbicacionActual`** (EN_TALLER, FUERA_DE_TALLER) está **decidido pero todavía no creado en código** (verificado 2026-09-23: no existe en `modelo/Enums`). No asumir que existe solo porque este archivo lo describe como decisión tomada.
+- **Nota:** `UbicacionActual` y `Ubicacion` tienen los mismos valores pero están pensados como enums distintos — `Ubicacion` se usa en `Observacion` (histórico al dejar la nota), `UbicacionActual` se usaría en `OrdenReparacion` (fuente de verdad actual, campo que tampoco existe todavía). Pendiente evaluar si se unifican en uno solo.
 
 ### Tipos primitivos: no usarlos nunca en entidades
 - **Todo atributo de entidad usa el wrapper, nunca el primitivo**: `Boolean` y no `boolean`, `Integer` y no `int`, `Long` y no `long`. Aplica también a los parámetros de constructores y a la firma de getters/setters.
@@ -214,9 +218,9 @@ Se retiraron restricciones que antes generaba el DDL. Ahora **son responsabilida
     - Contrapartida asumida: nombre, celular y correo quedan duplicados en las dos filas y pueden desincronizarse si alguien actualiza solo una.
   - Las longitudes se unificaron hacia arriba al fusionar: `nombre_completo` queda en 200 (era 100 en `Cliente`, 200 en `Tecnico`) y `correo` en 100 (era 100 en `Cliente`, 50 en `Tecnico`). Al unificar nunca se recorta longitud.
   - Las FKs que apuntan a `Cliente`/`Tecnico` conservan su nombre de columna local (`id_cliente`, `id_tecnico`, `id_tecnico_responsable`) pero su **`referencedColumnName` es ahora `id_persona`**, porque es el nombre real de la PK en las tablas `cliente` y `tecnico`. Aplica a `Vehiculo`, `Usuario`, `OrdenReparacion` (×2), `OrdenEtapaFecha` y `Notificaciones`.
-- La asignación de técnico vive **exclusivamente a nivel de etapa** (`OrdenEtapaFecha.idTecnico`). **Se eliminó `OrdenReparacion.idTecnicoResponsable`** — ya no existe un "técnico responsable general" de la OT; toda la asignación es por etapa.
-- **Se agregó `OrdenReparacion.idUsuarioCreador`** (FK a `Usuario`): se llena automáticamente una sola vez al crear la orden. Es el usuario que registró la OT. Es distinto de "Asesor de la orden" que se muestra en la pestaña Información (este último se deriva del último `HistorialEtapas.idUsuario`, no es un campo almacenado).
-- **`ubicacion`** y **`estadoRepuestos`** viven en `Observacion` (son el estado *al momento de dejar la nota*). **Además**, `OrdenReparacion` ahora tiene un campo `ubicacionActual` (`UbicacionActual`: `EN_TALLER` | `FUERA_DE_TALLER`) como **fuente de verdad** para el Dashboard de Alertas. Se sincroniza automáticamente en tres casos: (1) al registrar una `Observacion` con ubicación, (2) al marcar `fechaIngresoReparacion` → `EN_TALLER`, (3) al pasar a la etapa "Entregado" → `FUERA_DE_TALLER`.
+- La asignación de técnico vive **exclusivamente a nivel de etapa** (`OrdenEtapaFecha.idTecnico`). **Decisión: eliminar `OrdenReparacion.idTecnicoResponsable`** — ya no existe un "técnico responsable general" de la OT; toda la asignación es por etapa. **⚠️ Pendiente en código (verificado 2026-09-16):** la entidad `OrdenReparacion` **todavía tiene** el campo `tecnicoResponsable` (`@ManyToOne` a `Tecnico`, columna `id_tecnico_responsable`) — no se ha borrado. Al tocar esa clase, quitarlo para que coincida con la decisión.
+- **Se agregó `OrdenReparacion.idUsuarioCreador`** (FK a `Usuario`): se llena automáticamente una sola vez al crear la orden. Es el usuario que registró la OT. Es distinto de "Asesor de la orden" que se muestra en la pestaña Información (este último se deriva del último `HistorialEtapas.idUsuario`, no es un campo almacenado). **Ya está en la entidad** (campo `usuarioCreador`), pero como no hay Service para `OrdenReparacion` todavía, nada lo llena automáticamente hoy.
+- **`ubicacion`** y **`estadoRepuestos`** viven en `Observacion` (son el estado *al momento de dejar la nota*) — **ya en código**. **Decisión:** `OrdenReparacion` debería tener además un campo `ubicacionActual` (`UbicacionActual`: `EN_TALLER` | `FUERA_DE_TALLER`) como **fuente de verdad** para el Dashboard de Alertas, sincronizado en tres casos: (1) al registrar una `Observacion` con ubicación, (2) al marcar `fechaIngresoReparacion` → `EN_TALLER`, (3) al pasar a la etapa "Entregado" → `FUERA_DE_TALLER`. **⚠️ Pendiente en código:** ese campo **no existe** en la entidad `OrdenReparacion` (verificado 2026-09-16) — depende también de crear el enum `UbicacionActual`.
 - Rol **RECEPCIONISTA** fue renombrado a **ASESOR**.
 - **`TECNICO`** no tiene login al sistema web en el MVP — existe solo como entidad de catálogo para asignación en etapas y futuro cálculo de pagos. (`Usuario.idTecnico` permite vincular un técnico a un usuario *si* ese técnico sí necesita login, ej. rol GERENTE/ADMIN que también es técnico).
 - **CESVI** se trackea de forma independiente vía `Valoracion.cargadaCesvi` (boolean) + `cargadaCesviAt`. Se marca manualmente desde la UI, no automáticamente.
@@ -307,15 +311,15 @@ Muestra 7 etapas: Latonería, Pintura, Desarme, Electromecánica, Armado, Contro
 | `Ubicacion` (enum) | ✅ Completo | EN_TALLER, FUERA_DE_TALLER |
 | `Repuestos` (enum) | ✅ Completo | COMPLETOS, PENDIENTES |
 | `Especialidad` (enum) | ✅ Completo | ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD |
-| `UbicacionActual` (enum) | ✅ Completo | EN_TALLER, FUERA_DE_TALLER (nota: duplica valores de `Ubicacion` — pendiente evaluar unificación) |
+| `UbicacionActual` (enum) | ⏳ Pendiente | **No existe en código todavía.** EN_TALLER, FUERA_DE_TALLER (nota: duplica valores de `Ubicacion` — pendiente evaluar unificación) |
 | `Modulo` | ✅ Completa | PK Long+IDENTITY, `codigo` UNIQUE |
 | `RolModulo` | ✅ Completa | `@ManyToOne` a `Modulo`, enum `rol` reutilizado |
 | `Persona` | ✅ Completa | **Nueva.** Abstracta, `@Inheritance(JOINED)`, tabla `persona`. PK `idPersona`; `documento` (10, **sin UNIQUE** — se valida en el Service), `nombreCompleto` (200), `celular` (16, E.164), `correo` (100) nullable |
 | `Cliente` | ✅ Completa | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. Solo conserva `createAt`, `updateAt` y `@OneToMany vehiculos`. **Sin `idCliente`** — el id se hereda |
-| `Tecnico` | 🔶 Pendiente cambio | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. `especialidad` **ahora es enum `Especialidad`** (ARMADOR, LATONERO, MECANICO, ALISTADOR, PINTOR, CONTROL_CALIDAD), ya no texto libre. `activo`, `createAt`, `updateAt` y `@OneToOne usuario`. **Sin `idTecnico`** — el id se hereda |
-| `Vehiculo` | 🔶 Pendiente cambio | `@ManyToOne` a `Cliente`; `anio` Short **nullable** (cambio del 2026-09-11); `placa` (6) **UNIQUE** (`uk_vehiculo_placa`), `marca` (20), `modelo` (10), `vin` (100) nullable. **`idCliente` es de una sola escritura** — se asigna al crear y no se modifica después |
-| `Etapas` | 🔶 Pendiente cambio | `orden` Integer sin autoincrement; `nombre_etapa` (100). **Falta agregar `diasLimiteCritico`** (`Short`) — los 9 valores ya están definidos (ver "Días límite por etapa"). **Falta insertar la fila "Alistamiento de superficies"** en el catálogo (10 etapas reales en total) |
-| `OrdenReparacion` | 🔶 Pendiente cambio | Cambios del 2026-09-11: **se eliminó `idTecnicoResponsable`**, **se agregó `idUsuarioCreador`** (FK a `Usuario`, se llena auto al crear), **se agregó `ubicacionActual`** (enum `UbicacionActual`). `cambiarEtapa(idEtapa, idUsuario, idTecnico)`. **Sin métodos de negocio** |
+| `Tecnico` | ✅ Completa | `extends Persona` + `@PrimaryKeyJoinColumn(name = "id_persona")`. **`especialidad` es enum `Especialidad`** (length 20, `nullable = false`, aplicado 2026-09-23 — la columna en la base sigue `varchar(100) NULL`, ver nota en "Enums"). `activo`, `createAt`, `updateAt` y `@OneToOne usuario`. **Sin `idTecnico`** — el id se hereda. **Ya tiene repositorio/servicio/controlador** (ver "Capa de repositorio/servicio/controlador" más abajo) |
+| `Vehiculo` | 🔶 Pendiente cambio | `@ManyToOne` a `Cliente`; **`anio` sigue `Short` `nullable = false`** — la decisión de hacerlo nullable (2026-09-11) **no se aplicó en código** (verificado 2026-09-16); `placa` (6) **UNIQUE**, `marca` (20), `modelo` (10), `vin` (100) nullable. **`idCliente` es de una sola escritura** — se asigna al crear y no se modifica después |
+| `Etapas` | 🔶 Pendiente cambio | `orden` Integer sin autoincrement; `nombre_etapa` (100). **Falta agregar `diasLimiteCritico`** (`Short`) — los 9 valores ya están definidos (ver "Días límite por etapa"). **Falta insertar la fila "Alistamiento de superficies"** en el catálogo (10 etapas reales en total) — esto último es dato, no se puede verificar desde el código |
+| `OrdenReparacion` | 🔶 Pendiente cambio | **`idUsuarioCreador` ya está en código** (campo `usuarioCreador`, FK a `Usuario`, `nullable=false`). **`idTecnicoResponsable` NO se eliminó** — el campo `tecnicoResponsable` sigue en la entidad pese a la decisión de quitarlo (ver "Modelo de dominio"). **`ubicacionActual` no existe todavía** (depende del enum `UbicacionActual`, tampoco creado). `fechaIngresoCotizar` está `nullable = false`, lo cual choca con el flujo de negocio (se marca *después* de crear la orden, no al crearla) — revisar antes de escribir el Service de creación de órdenes. **Sin métodos de negocio, sin repositorio/servicio/controlador todavía** |
 | `HistorialEtapas` | 🔶 Pendiente cambio | Log append-only. **Se eliminó el campo `comentario`** — las notas viven en `Observacion` (ruta única) |
 | `OrdenEtapaFecha` | ✅ Completa | `UNIQUE(id_orden_reparacion, id_etapa)` + flag `completada` |
 | `Valoracion` | ✅ Completa | `@OneToOne` con `id_orden_reparacion` UNIQUE; `descripcionGeneral` (500). **Sin cascada** en `detalles`/`imagenes`, sin `marcarCargadaCesvi()` |
@@ -329,6 +333,56 @@ Muestra 7 etapas: Latonería, Pintura, Desarme, Electromecánica, Armado, Contro
 Leyenda: ✅ revisada/correcta · 🔶 en progreso · ⏳ pendiente
 
 **Transversal a toda la tabla (refactor del 2026-09-05):** ninguna entidad usa Lombok, ninguna tiene `@PrePersist`/`@PreUpdate` y ninguna tiene métodos de negocio. Todas llevan constructor vacío + constructor completo + getters/setters a mano, **salvo `Usuario`**, que perdió las anotaciones de Lombok y quedó sin ningún accesor (ver Pendientes).
+
+---
+
+## Capa de repositorio / servicio / controlador — estado real (verificado 2026-09-23)
+
+Lo único que existe fuera de `modelo/` es el módulo de `Tecnico` (commit `214fb1d`) más la infraestructura de validación y errores que se empezó el 2026-09-23. **Adrian lo está escribiendo él mismo para aprender** — en este módulo Claude guía paso a paso y **no modifica el código** salvo que se pida explícitamente.
+
+### Patrón de validación adoptado (2026-09-23) — aplicarlo igual en los demás módulos
+
+| Capa | Qué valida | Cómo falla |
+|---|---|---|
+| **DTO** (`dto/XxxRequestDto`) | Formato: vacío, largo, regex (Bean Validation) | `@Valid` en el Controller → Spring lanza `MethodArgumentNotValidException` |
+| **Service** | Reglas de negocio (duplicados, existencia, normalización) | `throw new RecursoNoEncontradoException(...)` / `ReglaNegocioException(...)` |
+| **`exception/GlobalExceptionHandler`** (`@RestControllerAdvice`) | Nada — es el único `catch` de la API | Traduce cada excepción a 400 / 404 / 409 / 500 |
+
+- **Sin `try/catch` en los controladores.** El único `try/catch` explícito previsto es en el Service alrededor de `save()` para traducir `DataIntegrityViolationException` a `ReglaNegocioException` (cubre el *check-then-insert* no atómico de documento duplicado).
+- Excepciones propias en `exception/`, ambas `extends RuntimeException` (unchecked: no obligan a `throws` y disparan rollback de `@Transactional`): `RecursoNoEncontradoException` → 404, `ReglaNegocioException` → 409.
+- Flujo de tipos: `JSON → XxxRequestDto (Controller, @Valid) → XxxRequestDto (Service) → entidad (Repository)`. El Service arma la entidad en 4 pasos: `new Entidad()` → copiar DTO→entidad → llenar lo que decide el sistema (`activo`, `createAt`, `updateAt`) → `save`.
+- El DTO **no** incluye `idPersona`, `activo`, `createAt` ni `updateAt` — el cliente no los decide. Igual que las entidades: sin Lombok, accesores a mano.
+- `@NotBlank` es solo para `String`; en un enum usar `@NotNull` (con `@NotBlank` compila pero lanza `UnexpectedTypeException` en runtime → 500).
+- Un valor de enum inexistente en el JSON (`"especialidad": "PLOMERO"`) lo rechaza Jackson **antes** de `@Valid`, con `HttpMessageNotReadableException`.
+- `spring-boot-starter-validation` ya está en el `pom.xml`. El paquete es `dto` (minúscula).
+- **Recordatorio de flujo de trabajo:** Java no recarga en caliente — tras cambiar código hay que reiniciar la app. Un 500 "inexplicable" el 2026-09-23 era el servidor corriendo el build de antes de los cambios.
+
+### Estado del módulo `Tecnico`
+
+- `repository/TecnicoRepository` — `JpaRepository<Tecnico, Long>` con `@Repository`, **sin finders propios todavía**. Previstos: `existsByDocumento`, `existsByDocumentoAndIdPersonaNot` (update), `findByActivoTrue`. Declararlos en el repo de `Tecnico` (no de `Persona`) hace que la consulta sea `tecnico JOIN persona`, que es justo la regla de duplicados "solo entre técnicos" de "Validaciones que ya no están en el esquema". Sigue faltando el conteo de `OrdenEtapaFecha` abiertas para la columna "En curso".
+- `dto/TecnicoRequestDto` — ✅ `documento` (`@NotBlank` + `^\d{6,10}$`), `nombreCompleto` (`@NotBlank` + `@Size(max=200)` + `^[\p{L} ]+$`, acepta tildes y ñ), `celular` (`@NotBlank` + `^\+?[0-9 -]{10,20}$`), `correo` (opcional, `@Email` + `@Size(max=100)`), `especialidad` (`@NotNull`, enum). **Faltan `message` en español** en `celular` y `correo` (hoy saldrían los mensajes por defecto en inglés).
+- `exception/GlobalExceptionHandler` — solo tiene el handler de `RecursoNoEncontradoException` (404). **Faltan:** `MethodArgumentNotValidException` → 400 con mapa `campo → mensaje`; `HttpMessageNotReadableException` → 400; `ReglaNegocioException` → 409; `Exception` genérica → 500 con mensaje fijo + `log.error` (nunca devolver `e.getMessage()` al cliente).
+- `service/TecnicoService`:
+  - ✅ `getTecnicoById` lanza `RecursoNoEncontradoException` (404, verificado en Postman). Cubre también PUT y DELETE, que lo reutilizan.
+  - ✅ `saveTecnico(TecnicoRequestDto)` arma la entidad, hace `trim()` a documento y nombre, y asigna `activo = true`, `createAt`, `updateAt`. **Resuelto el hueco de timestamps** en el alta.
+  - ⏳ `updateTecnico` sigue recibiendo la entidad `Tecnico` y hace `setActivo(datos.getActivo())` — un body sin `activo` pondría `NULL` y violaría el `NOT NULL`. Pasarlo a `TecnicoRequestDto`, quitar `setActivo`, asignar `updateAt`, no tocar `createAt` ni (por ahora) `documento`.
+  - ⏳ `deleteTecnicoById` sigue haciendo **`delete()` físico** — debe ser desactivar (`activo = false`), según "Módulos analizados → Técnicos". Falta también `reactivarTecnico`.
+  - ⏳ `getAllTecnico` usa `findAll()` — debe listar solo activos.
+  - ⏳ Sin validación de documento duplicado ni normalización de `celular` a E.164 (quitar espacios/guiones, anteponer `+57` a móvil de 10 dígitos, validar `^\+\d{8,15}$`).
+  - Sobra el `import org.springframework.http.ResponseEntity` (el Service no debe conocer HTTP).
+- `controller/TecnicoController` — `/api/tecnico`, `@CrossOrigin(origins = "*")` (revisar antes de producción).
+  - ✅ `POST` recibe `@Valid @RequestBody TecnicoRequestDto`.
+  - ⏳ `PUT` sigue recibiendo la entidad sin `@Valid` y devuelve `Tecnico` con un `ResponseEntity.ok(...).getBody()` innecesario → pasar a `ResponseEntity<Tecnico>`.
+  - ⏳ Falta `PATCH /{id}/reactivar`.
+  - Sigue devolviendo la entidad `Tecnico` en las respuestas. Riesgo: `Tecnico.usuario` → `Usuario` sin getters puede romper la serialización de Jackson cuando haya un usuario vinculado. Evaluar un `TecnicoResponseDto`.
+
+**Pruebas en Postman del 2026-09-23 (todas con el resultado esperado):** POST válido → 201 con `activo=true` y fechas; campos inválidos / `{}` / correo mal escrito → 400 (genérico de Spring, porque falta el handler de validación); `trim()` del nombre aplicado; especialidad inexistente → 400; GET id inexistente → 404. **Conocido y esperado:** repetir un documento todavía da 201 (duplicados sin validar).
+
+**Datos basura en la base de desarrollo:** hay técnicos creados antes de las validaciones (ej. `idPersona = 6`, nombre `"1234"`, celular `"212121aaaaaass"`) y celulares en formatos mezclados (`300 111 2233`, `3045649705`) más los de prueba del 2026-09-23. Limpiar o normalizar antes de dar datos por buenos.
+
+**Próximo paso (Paso C / Parte 5):** `updateTecnico` con DTO → handlers faltantes → reglas del Service (duplicados 409, E.164, desactivar/reactivar, listar activos).
+
+Ningún otro módulo (Cliente, Vehículo, OrdenReparacion, Etapas, Valoración, Usuario, Notificaciones, etc.) tiene repositorio, servicio o controlador todavía.
 
 ---
 
@@ -351,7 +405,7 @@ Escala de grises:
 
 ## Pendientes / próximos módulos
 
-La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entidades (17 concretas + la abstracta `Persona`) + 9 enums** escritas y el proyecto **compila** (`./mvnw compile` en verde). Tras el refactor del 2026-09-05 quedaron estos huecos que hay que cerrar **antes** de arrancar repositorios y servicios:
+La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entidades (17 concretas + la abstracta `Persona`) + 8 enums** escritas y el proyecto **compila** (`./mvnw compile` en verde, verificado 2026-09-23). `Especialidad` se creó el 2026-09-23; `UbicacionActual` **todavía no existe en código** — ver la nota en "Enums". Ya arrancó la capa de repositorio/servicio/controlador, pero solo para `Tecnico` (ver sección "Capa de repositorio/servicio/controlador"). Tras el refactor del 2026-09-05 quedaron estos huecos que hay que cerrar:
 
 0. **Deuda abierta por el refactor (prioridad alta):**
    - `Usuario` no tiene constructores ni accesores — escribirlos a mano como en el resto de entidades. Compila hoy solo porque nada la consume todavía; cualquier Service o DTO que la use no va a compilar.
@@ -374,21 +428,22 @@ La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entid
    - Igualar `ImagenObservacion.url` (255) con `ValoracionImagen.url` (2083): guardan el mismo tipo de dato.
    - `Modulo.codigo` con `length = 10` deja justo a códigos como `DETALLE_OT`; uno más descriptivo ya no entra.
 
-1. **Capa de repositorios**: interfaces `JpaRepository` con los finders que pide la guía (`getVehiculoByPlaca`, `getOrdenReparacionByPlaca`, `getValoracionByOrden`, `getPlantillaByEvento`, `getModuloByRol`, `getEtapasCompletadas(desde, hasta)`).
+1. **Capa de repositorios**: interfaces `JpaRepository` con los finders que pide la guía (`getVehiculoByPlaca`, `getOrdenReparacionByPlaca`, `getValoracionByOrden`, `getPlantillaByEvento`, `getModuloByRol`, `getEtapasCompletadas(desde, hasta)`). **Arrancó parcialmente**: `TecnicoRepository` ya existe pero sin finders propios (los previstos están listados en "Estado del módulo `Tecnico`"); falta el resto de entidades y cerrar los huecos de `TecnicoService`/`TecnicoController` descritos en "Capa de repositorio/servicio/controlador".
 2. **Capa de servicios**: los métodos CRUD que la guía lista dentro de cada clase son de Service/Repository, **no** de la entidad. Ahora *toda* la lógica va ahí — las entidades quedaron sin comportamiento.
 3. `@Transactional` sobre el Service que hace el cambio de etapa — la guía exige que actualizar `etapaActual` + insertar `HistorialEtapas` + cerrar/abrir `OrdenEtapaFecha` viajen en una sola transacción. La lógica que estaba en `OrdenReparacion.cambiarEtapa()` hay que reescribirla en ese Service.
 4. Regla pendiente de `Observacion`: si la etapa referenciada tiene `fechaInicio = NULL` al crear la observación, el Service debe marcarla con `NOW()` en la misma transacción.
 5. Listener `@Async` de notificaciones WhatsApp + interpolación de `PlantillaMensaje` (`{{cliente}}`, `{{placa}}`, `{{etapa}}`). Un fallo de WhatsApp nunca debe romper la operación principal.
-6. Configuración de MySQL en `application.properties` (hoy solo tiene `spring.application.name`) y decidir migraciones (Flyway/Liquibase) vs `ddl-auto`.
+5b. **Capa de autenticación y seguridad** (nuevo, requerido por el módulo de Login analizado el 2026-09-16): login por `email`/contraseña contra `Usuario`, verificación de hash (`passwordHash`), control de acceso por rol a cada módulo/endpoint, y bloqueo de usuarios inactivos. Hoy **no existe nada** de esto — el único controlador (`TecnicoController`) está con `@CrossOrigin(origins = "*")` y sin protección. Decidir el mecanismo (Spring Security + sesión o JWT). El `passwordHash` implica además elegir el encoder (ej. BCrypt) en el Service de creación/edición de usuarios.
+6. ~~Configuración de MySQL en `application.properties`~~ — **parcialmente resuelto** (verificado 2026-09-16): ya tiene datasource real, pero apunta a **MariaDB**, no a MySQL: `spring.datasource.url=jdbc:mariadb://localhost:3306/gestion_reparacion_colision`, `spring.datasource.username=root` sin password, `spring.jpa.hibernate.ddl-auto=update`, `show-sql`/`format_sql` en `true`. El `pom.xml` mantiene **ambos** drivers (`mysql-connector-j` y `mariadb-java-client`); confirmar con Adrian cuál motor es el real y quitar la dependencia que sobra. **Ojo:** la URL **no** trae `createDatabaseIfNotExist=true` (a diferencia de lo que asume la nota sobre `ddl-auto=update` en la sección de arriba) — sin ese parámetro, `update` fallará si la base `gestion_reparacion_colision` no existe todavía a mano. Sigue sin decidirse Flyway/Liquibase vs `ddl-auto`.
 7. Módulo de **Valoración** — **analizado el 2026-09-13**: pantalla propia con búsqueda por placa + 3 filtros, más la pestaña homónima de la Ficha (misma pantalla reutilizada). Export PDF de la hoja y ZIP de fotos generados al vuelo para CESVI. Ver sección "Módulos analizados" más abajo.
 8. **Ficha de Orden de Trabajo** — **analizada el 2026-09-11**: 5 pestañas (Información, Reparación, Valoración, Observaciones, Fotografías). Ver sección "Módulos analizados" más abajo.
-9. Documentación formal (Reglas de Negocio numeradas, Escenarios, Historias de Usuario, criterios de aceptación).
+9. Documentación formal — **avanzado el 2026-09-16**: se generó el **Product Backlog del MVP** (30 historias de usuario en 8 épicas, con criterios de aceptación en Gherkin), a partir de este análisis. Incluye una **épica de Autenticación/Login** (ver "Módulos analizados → Autenticación"), que se añadió al detectar que el módulo Usuarios ya implicaba un inicio de sesión. Pendiente: refinar prioridades MoSCoW y estimar en puntos durante el Sprint Planning; las Reglas de Negocio numeradas y los Escenarios formales siguen sin redactarse como documento aparte.
 10. Fase futura: rol de técnico de campo con acceso web/móvil; cálculo de pagos por etapa sobre `OrdenEtapaFecha.idTecnico`.
 11. Nombre final del proyecto — aún abierto.
 12. **Deuda de código de las sesiones 2026-09-11/13** (Técnicos, Usuarios, Valoración — analizadas en requisitos, pendientes en código):
     - Agregar `Etapas.diasLimiteCritico` (`Short`, `NULL` para `Entregado`) con los 9 valores ya definidos (ver "Días límite por etapa").
     - Insertar la fila **"Alistamiento de superficies"** en el catálogo `Etapas`, entre Electromecánica y Pintura.
-    - Aplicar en la clase `Tecnico` el cambio de `especialidad` de texto libre a enum `Especialidad` (ya reflejado en las tablas de este archivo, falta en la entidad real).
+    - ~~Aplicar en la clase `Tecnico` el cambio de `especialidad` a enum `Especialidad`~~ — **hecho el 2026-09-23**. Queda el `ALTER TABLE` de la columna en la base (ver nota en "Enums").
     - Entidad/pantalla `Usuario`: la lógica de negocio ya quedó completamente definida (ver "Módulos analizados"), pero sigue pendiente el punto 0 (constructores/accesores).
 
 ### Decisiones que quedaron abiertas en el modelo
@@ -400,9 +455,30 @@ La capa de modelo (`gestion.reparabilidad.colision.modelo`) tiene sus **18 entid
 
 ---
 
-## Módulos analizados (sesiones de análisis de requisitos, 2026-09-10 al 13)
+## Módulos analizados (sesiones de análisis de requisitos, 2026-09-10 al 16)
 
 La documentación formal (RN, EC, HU, criterios de aceptación) se elaborará al cerrar todos los módulos. Esta sección recoge las decisiones confirmadas por módulo.
+
+### Autenticación y control de acceso
+- **Añadido el 2026-09-16 al elaborar el Product Backlog.** No estaba descrito como módulo propio, pero el módulo Usuarios ya gestiona cuentas con `passwordHash` y `rol`, lo que implica un inicio de sesión. Es la base transversal: ningún módulo es accesible sin sesión iniciada.
+- **Inicio de sesión**: con `email` (único en `Usuario`) y contraseña. Autenticación correcta → entra al Dashboard de Alertas. Solo usuarios con estado activo pueden iniciar sesión (un usuario desactivado no accede aunque las credenciales sean válidas). Ante credenciales incorrectas, mensaje de error genérico que no precisa si falló el correo o la contraseña.
+- **Control de acceso por rol**: el usuario autenticado solo ve en el menú los módulos permitidos para su rol; el sistema bloquea el acceso por URL directa a un módulo no permitido. El acceso de cada módulo es el que ya detalla cada subsección de aquí.
+- **Rol `TECNICO` sin acceso web en el MVP**: existe solo como catálogo interno. El formulario de creación de usuarios ni siquiera ofrece ese rol (ver Usuarios).
+- **Cierre de sesión**: termina la sesión y devuelve a la pantalla de login; tras cerrar, volver atrás exige autenticarse de nuevo.
+- **Contraseñas sin autogestión** (ver detalle en Usuarios): no hay autoregistro, enlace de activación ni "cambiar mi propia contraseña". La asigna quien crea el usuario; ante olvido, un ADMIN/GERENTE la reasigna. Se guarda con hash — ni quien la asignó puede volver a verla.
+- **Resumen de acceso por módulo** (referencia rápida; el detalle vive en cada subsección):
+
+| Módulo | ADMIN | GERENTE | ASESOR | TECNICO |
+|---|---|---|---|---|
+| Dashboard de Alertas | Sí | Sí | Sí | No |
+| Backlog Kanban | Sí | Sí | Sí | No |
+| Ficha de Orden | Sí | Sí | Sí | No |
+| Nueva Orden | Sí | Sí | Sí | No |
+| Valoración | Sí | Sí | Sí | No |
+| Técnicos | CRUD | CRUD | Solo lectura | No |
+| Usuarios | CRUD | CRUD | No | No |
+
+**⚠️ Pendiente en código:** no existe todavía ninguna capa de autenticación/seguridad (Spring Security, JWT o similar). Hoy el único controlador (`TecnicoController`) usa `@CrossOrigin(origins = "*")` sin ninguna protección — ver "Capa de repositorio/servicio/controlador".
 
 ### Dashboard de Alertas
 - 6 tarjetas clicables: Vehículos en Taller, Fuera del Taller, Críticos, Vencidos, Próximos a Vencer, En Proceso. Clic en la tarjeta navega a lista filtrada (no hay botón "Ver en backlog").
@@ -507,7 +583,7 @@ Transversal, ya conocido desde antes:
 
 ## Cómo trabajar en este proyecto (para Claude Code)
 
-- La guía de referencia **está en la raíz del repo**: `GuiaDiagranaUML.pdf` (21 páginas, con atributos, tipos, restricciones, métodos y reglas de negocio de cada clase). Para leerla: `pip install pypdf` y extraer el texto con `pypdf.PdfReader`.
+- **`GuiaDiagranaUML.pdf` ya NO está en la raíz del repo** — se borró en el commit `a7b80cb elimine el archivo guiaUml` (2026-09-12). Si hace falta consultar la guía, la fuente de verdad sigue viva en `docs/contenido_guia.py` (léelo directamente, sin pasar por PDF) o regenera el archivo con `python docs/generar_guia.py` antes de intentar abrirlo — no asumas que el PDF existe en el árbol de trabajo.
 - **La guía se regenera desde código, no se edita a mano.** Su fuente vive en `docs/`:
   - `docs/contenido_guia.py` — los datos (una función por sección, con las tablas de atributos y métodos de cada clase).
   - `docs/generar_guia.py` — el layout (estilos, tablas, recuadros, pie de página).
@@ -517,7 +593,7 @@ Transversal, ya conocido desde antes:
   ```
   El PDF original venía de ReportLab pero sin fuente en el repo, así que cada corrección obligaba a rehacerlo entero. Al cambiar una longitud o una regla, se edita `docs/contenido_guia.py` y se regenera.
 - **Precedencia entre documentos:** manda el **código**. Antes la guía era la fuente de verdad, pero desde el refactor del 2026-09-05 las longitudes de columna se ajustaron a la necesidad real del taller y ya no coinciden con el `VARCHAR(255)` original. Si una entidad y la guía difieren, se corrige la guía (regenerándola) y este archivo, no la entidad.
-- **Estado de sincronización:** este archivo se actualizó por última vez el 2026-09-13, incorporando las decisiones de las sesiones de análisis de requisitos (2026-09-06 al 13: reinstalación de `Persona`, especialidad como enum, nueva etapa "Alistamiento de superficies", módulos Técnicos/Usuarios/Valoración). `GuiaDiagranaUML.pdf` y las entidades JPA reales **no** se han verificado contra estos cambios — no asumir que están sincronizados hasta confirmarlo contra el código y regenerar la guía si hace falta.
+- **Estado de sincronización (2026-09-23):** se creó el enum `Especialidad` y se aplicó en `Tecnico`, y se inició el patrón DTO + excepciones propias + `@RestControllerAdvice` en el módulo `Tecnico` (ver "Capa de repositorio/servicio/controlador"). El resto de la lista de abajo sigue vigente. Antes de eso, este archivo se había actualizado el 2026-09-16, tras verificar el backend real contra lo que este documento venía describiendo como "decidido". Resultado de esa verificación: **hay decisiones documentadas que todavía no están en el código.** Concretamente, a esa fecha, el código **no** tiene: ~~el enum `Especialidad`~~ (hecho 2026-09-23), el enum `UbicacionActual` ni el campo `OrdenReparacion.ubicacionActual`, `Etapas.diasLimiteCritico`, ni la eliminación de `OrdenReparacion.tecnicoResponsable`; tampoco se aplicó `Vehiculo.anio` nullable. Sí está resuelto: `application.properties` con datasource real (MariaDB, ver "Pendientes" punto 6) y una primera capa de repositorio/servicio/controlador para `Tecnico` (ver esa sección), aunque con huecos ("Eliminar" hace borrado físico en vez de desactivar; los timestamps del alta se resolvieron el 2026-09-23, los del update no). No vuelvas a dar estas decisiones por implementadas sin releer el código — usa esta lista como punto de partida, no como verdad definitiva (el código sigue avanzando). Ese mismo día se añadió la sección de requisitos "Autenticación y control de acceso" (base del Product Backlog) — es análisis, no código: no existe todavía ninguna capa de seguridad (ver "Pendientes" punto 5b).
 - Antes de generar o corregir una entidad, contrastar contra la guía — no asumir nombres de campos ni cardinalidades sin verificar. **Excepción: las longitudes de columna.** Se ajustaron a la necesidad real del taller y ya no coinciden con el `VARCHAR(255)` de la guía; ahí manda la tabla de la sección "Longitudes de String" y el código.
 - **No reintroducir Lombok** en las entidades: los getters, setters y constructores se escriben a mano (ver sección correspondiente).
 - Los métodos CRUD que la guía lista dentro de cada clase (`createCliente`, `getAllVehiculo`, …) describen la **API del Service/Repository**, no métodos de la entidad JPA. No meterlos dentro de la entidad.

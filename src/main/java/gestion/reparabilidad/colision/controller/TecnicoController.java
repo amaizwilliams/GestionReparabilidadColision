@@ -1,7 +1,9 @@
 package gestion.reparabilidad.colision.controller;
 
+import gestion.reparabilidad.colision.dto.TecnicoRequestDto;
 import gestion.reparabilidad.colision.modelo.Tecnico;
 import gestion.reparabilidad.colision.service.TecnicoService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,9 +32,9 @@ public class TecnicoController {
     }
 
     @PostMapping
-    public ResponseEntity<Tecnico> crearTecnico(@RequestBody Tecnico tecnico) {
+    public ResponseEntity<Tecnico> crearTecnico(@Valid @RequestBody TecnicoRequestDto request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(tecnicoService.saveTecnico(tecnico));
+                .body(tecnicoService.saveTecnico(request));
     }
 
     @PutMapping("/{id}")

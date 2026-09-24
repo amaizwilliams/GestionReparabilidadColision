@@ -1,6 +1,9 @@
 package gestion.reparabilidad.colision.modelo;
 
+import gestion.reparabilidad.colision.modelo.Enums.Especialidad;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -9,8 +12,10 @@ import java.time.LocalDateTime;
 @PrimaryKeyJoinColumn(name = "id_persona")
 public class Tecnico extends Persona {
 
-    @Column(name = "especialidad", length = 100)
-    private String especialidad;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "especialidad", length = 20, nullable = false)
+    private Especialidad especialidad;
 
     @Column(name = "activo", nullable = false)
     private Boolean activo = true;
@@ -29,7 +34,7 @@ public class Tecnico extends Persona {
     public Tecnico() {
     }
 
-    public Tecnico(String documento, String nombreCompleto, String celular, String correo, String especialidad, Boolean activo, LocalDateTime createAt, LocalDateTime updateAt) {
+    public Tecnico(String documento, String nombreCompleto, String celular, String correo,Especialidad especialidad, Boolean activo, LocalDateTime createAt, LocalDateTime updateAt) {
         super(documento, nombreCompleto, celular, correo);
         this.especialidad = especialidad;
         this.activo = activo;
@@ -39,11 +44,11 @@ public class Tecnico extends Persona {
 
     //getters and setters
 
-    public String getEspecialidad() {
+    public Especialidad getEspecialidad() {
         return especialidad;
     }
 
-    public void setEspecialidad(String especialidad) {
+    public void setEspecialidad(Especialidad especialidad) {
         this.especialidad = especialidad;
     }
 
