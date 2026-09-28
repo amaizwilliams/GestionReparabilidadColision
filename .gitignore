@@ -19,6 +19,7 @@ target/
 *.iml
 *.ipr
 
+
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
@@ -37,3 +38,10 @@ build/
 
 # Variables de entorno locales
 .env
+
+
+/pom.xml
+
+#claude
+CLAUDE.md
+.claude
