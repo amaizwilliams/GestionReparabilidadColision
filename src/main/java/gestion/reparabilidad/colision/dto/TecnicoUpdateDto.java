@@ -1,4 +1,5 @@
 package gestion.reparabilidad.colision.dto;
+
 import gestion.reparabilidad.colision.modelo.Enums.Especialidad;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
@@ -8,20 +9,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @Setter
 @NoArgsConstructor
-public class TecnicoRequestDto {
-
-    /*
-    ESTA VRGA LA DEJE YO MISMO, NO ESTOY HACIENDO VIBE CODING, ESTOY APRENDIENDO....
-
-    Cómo leer las anotaciones:
-    - @NotBlank: rechaza null, "" y "   ". Solo aplica a String.
-    - @Pattern: la expresión regular tiene que cumplirse completa. \\d{6,10} = entre 6 y 10 dígitos. \\p{L} = cualquier letra, incluidas tildes y ñ (Pérez, Muñoz), algo que [a-zA-Z] no cubre. Ese patrón es el que rechaza el "1234" que tienes guardado.
-    - En Java la barra invertida se escribe doble dentro de un String (\\d), porque \d solo no compila.
-    */
-
-    @NotBlank(message = "El documento es obligatorio")
-    @Pattern(regexp = "^\\d{6,10}$", message = "El documento debe tener solo números, entre 6 y 10 dígitos")
-    private String documento;
+public class TecnicoUpdateDto {
 
     @NotBlank(message = "El nombre es obligatorio")
     @Size(max = 200, message = "El nombre no puede superar 200 caracteres")
@@ -40,4 +28,3 @@ public class TecnicoRequestDto {
     private Especialidad especialidad;
 
 }
-

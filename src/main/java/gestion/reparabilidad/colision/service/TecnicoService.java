@@ -1,14 +1,11 @@
 package gestion.reparabilidad.colision.service;
-
+import gestion.reparabilidad.colision.dto.TecnicoUpdateDto;
 import gestion.reparabilidad.colision.exception.RecursoNoEncontradoException;
 import gestion.reparabilidad.colision.modelo.Tecnico;
 import gestion.reparabilidad.colision.repository.TecnicoRepository;
-import org.springframework.http.ResponseEntity;
 import gestion.reparabilidad.colision.dto.TecnicoRequestDto;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
-
-import org.springframework.http.ResponseEntity;
 
 import java.util.List;
 
@@ -22,7 +19,11 @@ public class TecnicoService {
     }
 
     public List<Tecnico> getAllTecnico() {
-        return tecnicoRepository.findAll();
+        return tecnicoRepository.findByActivoTrue();
+    }
+
+    public List<Tecnico> getAllTecnicoDesactivado() {
+        return tecnicoRepository.findByActivoFalse();
     }
 
     public Tecnico getTecnicoById(Long id) {
@@ -44,20 +45,28 @@ public class TecnicoService {
         return tecnicoRepository.save(tecnico);
     }
 
-    public Tecnico updateTecnico(Long id, Tecnico datos) {
+    public Tecnico updateTecnico(Long id ,TecnicoUpdateDto datos) {
         Tecnico tecnico = getTecnicoById(id);
         tecnico.setNombreCompleto(datos.getNombreCompleto());
         tecnico.setCelular(datos.getCelular());
         tecnico.setCorreo(datos.getCorreo());
         tecnico.setEspecialidad(datos.getEspecialidad());
-        tecnico.setActivo(datos.getActivo());
-
+        tecnico.setUpdateAt(LocalDateTime.now());
         return tecnicoRepository.save(tecnico);
     }
 
     public void deleteTecnicoById(Long id) {
         Tecnico tecnico = getTecnicoById(id);
-        tecnicoRepository.delete(tecnico);
+        tecnico.setActivo(false);
+        tecnico.setUpdateAt(LocalDateTime.now());
+        tecnicoRepository.save(tecnico);
+    }
+
+    public Tecnico reactivarTecnico(Long id){
+        Tecnico tecnico = getTecnicoById(id);
+        tecnico.setActivo(true);
+        tecnico.setUpdateAt(LocalDateTime.now());
+        return tecnicoRepository.save(tecnico);
     }
 
 

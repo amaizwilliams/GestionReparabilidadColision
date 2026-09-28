@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import gestion.reparabilidad.colision.dto.TecnicoUpdateDto;
 
 import java.util.List;
 
@@ -26,6 +27,12 @@ public class TecnicoController {
         return ResponseEntity.ok(tecnicoService.getAllTecnico());
     }
 
+    @GetMapping("/desactivados")
+    public ResponseEntity<List<Tecnico>> listarTecnicosDesactivados() {
+        return ResponseEntity.ok(tecnicoService.getAllTecnicoDesactivado());
+    }
+
+
     @GetMapping("/{id}")
     public ResponseEntity<Tecnico> buscar(@PathVariable Long id) {
         return ResponseEntity.ok(tecnicoService.getTecnicoById(id));
@@ -38,8 +45,8 @@ public class TecnicoController {
     }
 
     @PutMapping("/{id}")
-    public Tecnico actualizar(@PathVariable Long id, @RequestBody Tecnico tecnico) {
-        return ResponseEntity.ok(tecnicoService.updateTecnico(id, tecnico)).getBody();
+    public ResponseEntity<Tecnico> actualizar(@PathVariable Long id, @Valid @RequestBody TecnicoUpdateDto datos) {
+        return ResponseEntity.ok(tecnicoService.updateTecnico(id, datos));
     }
 
     @DeleteMapping("/{id}")
@@ -47,4 +54,10 @@ public class TecnicoController {
         tecnicoService.deleteTecnicoById(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PatchMapping("/{id}/reactivar")
+    public ResponseEntity<Tecnico> reactivar(@PathVariable Long id){
+        return ResponseEntity.ok(tecnicoService.reactivarTecnico(id));
+    }
+
 }

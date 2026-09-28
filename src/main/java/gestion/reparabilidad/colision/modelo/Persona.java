@@ -1,7 +1,13 @@
 package gestion.reparabilidad.colision.modelo;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
 
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "persona", indexes = @Index(name = "idx_persona_documento", columnList = "documento"))
 @Inheritance(strategy = InheritanceType.JOINED)
@@ -23,58 +29,4 @@ public abstract class Persona {
 
     @Column(name = "correo", length = 100)
     private String correo;
-
-    //contructores
-
-    public Persona() {
-    }
-
-    public Persona(String documento, String nombreCompleto, String celular, String correo) {
-        this.documento = documento;
-        this.nombreCompleto = nombreCompleto;
-        this.celular = celular;
-        this.correo = correo;
-    }
-
-    //getters and setters
-
-    public Long getIdPersona() {
-        return idPersona;
-    }
-
-    public void setIdPersona(Long idPersona) {
-        this.idPersona = idPersona;
-    }
-
-    public String getDocumento() {
-        return documento;
-    }
-
-    public void setDocumento(String documento) {
-        this.documento = documento;
-    }
-
-    public String getNombreCompleto() {
-        return nombreCompleto;
-    }
-
-    public void setNombreCompleto(String nombreCompleto) {
-        this.nombreCompleto = nombreCompleto;
-    }
-
-    public String getCelular() {
-        return celular;
-    }
-
-    public void setCelular(String celular) {
-        this.celular = celular;
-    }
-
-    public String getCorreo() {
-        return correo;
-    }
-
-    public void setCorreo(String correo) {
-        this.correo = correo;
-    }
 }
